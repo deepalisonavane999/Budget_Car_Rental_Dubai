@@ -13,7 +13,8 @@ import {
 import { useWorkspace } from '../context/WorkspaceContext';
 import { Badge } from '../components/common/Badge';
 import { CommunicationDock } from '../components/communication/CommunicationDock';
-import { mockLeadHistory } from '../services/mockData';
+// import { mockLeadHistory } from '../services/mockData';
+import { mockLeadHistory } from '../services/mockDataAccCollection';
 
 export const ReservationsPage: React.FC = () => {
   const {
@@ -23,6 +24,7 @@ export const ReservationsPage: React.FC = () => {
     updateReservationBooking,
     confirmReservationBooking,
     cancelReservationBooking,
+    setIsFleetPickerOpen,
   } = useWorkspace();
   const [leadHistory] = useState(mockLeadHistory);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
@@ -109,7 +111,7 @@ export const ReservationsPage: React.FC = () => {
             <div>
               <span className="text-slate-400 block text-[9px]">Pickup Date</span>
               <span className="font-bold text-slate-800 block">
-                {reservationQuote.pickupDate} 10:00
+                {reservationQuote.pickupDate} {reservationQuote.pickupTime}
               </span>
             </div>
             <div>
@@ -121,12 +123,14 @@ export const ReservationsPage: React.FC = () => {
             <div>
               <span className="text-slate-400 block text-[9px]">Return Date</span>
               <span className="font-bold text-slate-800 block">
-                {reservationQuote.returnDate} 10:00
+                {reservationQuote.returnDate} {reservationQuote.returnTime}
               </span>
             </div>
             <div>
               <span className="text-slate-400 block text-[9px]">Rental Type</span>
-              <span className="font-bold text-slate-800 block">{reservationQuote.rentalType} (3d)</span>
+              <span className="font-bold text-slate-800 block">
+                {reservationQuote.rentalType} ({reservationQuote.rentalDays}d)
+              </span>
             </div>
             <div>
               <span className="text-slate-400 block text-[9px]">Vehicle Group</span>
@@ -143,20 +147,31 @@ export const ReservationsPage: React.FC = () => {
 
           {/* Vehicle Specs & Breakdown */}
           <div className="grid grid-cols-12 gap-2 items-center text-[10px]">
-            <div className="col-span-4 flex items-center space-x-2">
-              <div className="w-10 h-9 bg-blue-50 text-blue-600 rounded flex items-center justify-center border border-blue-100 shrink-0">
-                <Car className="w-4 h-4" />
-              </div>
-              <div className="leading-tight">
-                <h3 className="font-bold text-slate-900 text-xs">{reservationQuote.vehicle.model}</h3>
-                <div className="flex items-center space-x-1.5 text-slate-500 text-[9px] mt-0.5">
-                  <span>5 Seats</span>
-                  <span>•</span>
-                  <span>2 Bags</span>
-                  <span>•</span>
-                  <span>Auto</span>
+            <div className="col-span-4 flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <div className="w-10 h-9 bg-blue-50 text-blue-600 rounded flex items-center justify-center border border-blue-100 shrink-0">
+                  <Car className="w-4 h-4" />
+                </div>
+                <div className="leading-tight">
+                  <h3 className="font-bold text-slate-900 text-xs">{reservationQuote.vehicle.model}</h3>
+                  <div className="flex items-center space-x-1.5 text-slate-500 text-[9px] mt-0.5">
+                    <span>{reservationQuote.vehicle.seats || 5} Seats</span>
+                    <span>•</span>
+                    <span>{reservationQuote.vehicle.bags || 2} Bags</span>
+                    <span>•</span>
+                    <span>{reservationQuote.vehicle.transmission || 'Auto'}</span>
+                  </div>
                 </div>
               </div>
+
+              <button
+                type="button"
+                onClick={() => setIsFleetPickerOpen(true)}
+                className="px-2 py-0.5 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-600 rounded text-[9px] font-semibold flex items-center space-x-1"
+                title="Browse Speed API vehicle fleet"
+              >
+                <span>Change Car</span>
+              </button>
             </div>
 
             <div className="col-span-3 border-l border-slate-100 pl-2">

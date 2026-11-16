@@ -114,6 +114,11 @@ export interface VoucherItem {
   date: string;
   amount: number;
   tax?: number | null;
+  allocatedAmount?: number | null;
+  isClosed?: boolean;
+  dueAmount?: number;
+  statusText?: string | null;
+  url?: string | null;
   notes?: string | null;
 }
 
@@ -122,6 +127,8 @@ export interface InvoiceResult {
   voucherNo: string;
   date: string;
   amount: number;
+  tax?: number;
+  discount?: number;
   notes?: string;
   agreementId?: number;
   contactId?: number;
@@ -131,10 +138,12 @@ export interface DepositItem {
   id: number;
   type: number;
   voucherNo: string;
+  amount?: number;
   amountUsed: number;
   amountRefunded: number;
   amountRemaining: number;
   date: string;
+  isClosed?: boolean;
   notes?: string | null;
 }
 
@@ -148,6 +157,10 @@ export interface TrafficFineItem {
   amount: number;
   surcharge?: number;
   amountWithSurcharge?: number;
+  plateNo?: string;
+  plateInfo?: string;
+  fineDescription?: string;
+  isPaid?: boolean;
 }
 
 export interface VehicleItem {

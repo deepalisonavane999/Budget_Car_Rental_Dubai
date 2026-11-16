@@ -3,11 +3,11 @@ import { X, ArrowRightLeft } from 'lucide-react';
 import { useWorkspace } from '../../context/WorkspaceContext';
 
 export const TransferCallModal: React.FC = () => {
-  const { isTransferOpen, setIsTransferOpen } = useWorkspace();
+  const { isTransferOpen, setIsTransferOpen, caseDetails, previousRental } = useWorkspace();
   const [destQueue, setDestQueue] = useState('Finance');
   const [transferType, setTransferType] = useState<'Warm' | 'Cold'>('Warm');
   const [notes, setNotes] = useState(
-    'Customer following up on deposit refund (FIN-10482) for RA-20301. Please assist.'
+    `Customer following up on deposit refund (${caseDetails.ticketNo}) for ${previousRental.agreementNo}. Please assist.`
   );
   const [loading, setLoading] = useState(false);
 

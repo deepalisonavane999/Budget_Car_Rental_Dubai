@@ -1,8 +1,8 @@
 import React from 'react';
 import { Phone, Mail, MessageSquare, Ticket, ChevronRight, ChevronLeft, Activity } from 'lucide-react';
 import { useWorkspace, ActivityTab } from '../../context/WorkspaceContext';
-import { mockActivityTimeline } from '../../services/mockData';
-
+// import { mockActivityTimeline } from '../../services/mockData';
+import { mockActivityTimeline } from '../../services/mockDataAccCollection';
 export const CustomerActivitySidebar: React.FC = () => {
   const { activityFilter, setActivityFilter, isRightSidebarOpen, toggleRightSidebar } =
     useWorkspace();

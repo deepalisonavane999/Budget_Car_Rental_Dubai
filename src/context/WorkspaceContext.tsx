@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   CustomerProfile,
@@ -8,6 +8,15 @@ import {
   CaseDetails,
   RoadsideAssistanceRequest,
 } from '../types/crm.types';
+// import {
+//   mockCustomer,
+//   mockActiveRental,
+//   mockPreviousRental,
+//   mockBillingSummary,
+//   mockReservationQuote,
+//   mockCaseDetails,
+//   mockRoadsideAssistance,
+// } from '../services/mockData';
 import {
   mockCustomer,
   mockActiveRental,
@@ -16,7 +25,7 @@ import {
   mockReservationQuote,
   mockCaseDetails,
   mockRoadsideAssistance,
-} from '../services/mockData';
+} from '../services/mockDataAccCollection';
 import {
   apiService,
   CustomerDetailResult,
@@ -30,7 +39,7 @@ import {
 
 export type CommMode = 'phone' | 'chat' | 'email';
 export type ActivityTab = 'all' | 'calls' | 'chats' | 'emails' | 'tickets';
-export type OperationsSubTab = 'roadside' | 'maintenance' | 'replacement' | 'delivery' | 'lost_found';
+export type OperationsSubTab = 'roadside' | 'accidents' | 'maintenance' | 'replacement' | 'delivery' | 'lost_found';
 
 interface WorkspaceContextType {
   // Agent
@@ -91,6 +100,29 @@ interface WorkspaceContextType {
   setIsTransferOpen: (open: boolean) => void;
   isCustomerEditOpen: boolean;
   setIsCustomerEditOpen: (open: boolean) => void;
+  isAddCardOpen: boolean;
+  setIsAddCardOpen: (open: boolean) => void;
+  editingCard: ContactCardItem | null;
+  openEditCardModal: (card: ContactCardItem) => void;
+  isDocDrawerOpen: boolean;
+  setIsDocDrawerOpen: (open: boolean) => void;
+  isFleetPickerOpen: boolean;
+  setIsFleetPickerOpen: (open: boolean) => void;
+  isExtensionOpen: boolean;
+  setIsExtensionOpen: (open: boolean) => void;
+  isReturnOpen: boolean;
+  setIsReturnOpen: (open: boolean) => void;
+
+  // Search & Profile Actions
+  searchCustomer: (query: string) => Promise<{ success: boolean; message: string }>;
+  resetCustomer: () => void;
+
+  // Fleet & Vehicle Selection
+  selectVehicleForQuote: (vehicle: { model: string; group: string; plateNo?: string; rate?: number }) => void;
+
+  // Agreement Extension & Return Actions
+  extendRentalAgreement: (params: { newReturnDate: string; newReturnTime: string; additionalCharges: number; notes: string }) => Promise<{ success: boolean; message: string }>;
+  processEarlyReturn: (params: { returnDate: string; returnTime: string; locationId: number; returnOdometer: number; fuelLevel: string }) => Promise<{ success: boolean; message: string }>;
 
   // Actions
   addCaseReply: (replyText: string, isInternal?: boolean) => void;
@@ -118,7 +150,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const ivrPath = 'Arabic → Existing Rental → Billing Support';
 
   const [customer, setCustomer] = useState<CustomerProfile>(mockCustomer);
-  const [customerCards, setCustomerCards] = useState<ContactCardItem[]>([]);
+  const [customerCards, setCustomerCards] = useState<ContactCardItem[]>(mockCustomer.contactCards || []);
   const [activeRental, setActiveRental] = useState<RentalAgreement>(mockActiveRental);
   const [previousRental, setPreviousRental] = useState<RentalAgreement>(mockPreviousRental);
   const [billingSummary, setBillingSummary] = useState<BillingSummary>(mockBillingSummary);
@@ -136,6 +168,17 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(true);
   const [isTransferOpen, setIsTransferOpen] = useState(false);
   const [isCustomerEditOpen, setIsCustomerEditOpen] = useState(false);
+  const [isAddCardOpen, setIsAddCardOpen] = useState(false);
+  const [editingCard, setEditingCard] = useState<ContactCardItem | null>(null);
+  const [isDocDrawerOpen, setIsDocDrawerOpen] = useState(false);
+
+  const openEditCardModal = (card: ContactCardItem) => {
+    setEditingCard(card);
+    setIsAddCardOpen(true);
+  };
+  const [isFleetPickerOpen, setIsFleetPickerOpen] = useState(false);
+  const [isExtensionOpen, setIsExtensionOpen] = useState(false);
+  const [isReturnOpen, setIsReturnOpen] = useState(false);
 
   const toggleLeftSidebar = () => setIsLeftSidebarOpen((prev) => !prev);
   const toggleRightSidebar = () => setIsRightSidebarOpen((prev) => !prev);
@@ -187,6 +230,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const opParam = searchParams.get('op') as OperationsSubTab;
   const operationsSubTab: OperationsSubTab = [
     'roadside',
+    'accidents',
     'maintenance',
     'replacement',
     'delivery',
@@ -217,33 +261,208 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     apiService.setApiKey(urlApiKey);
   }
 
-  // Load reference data silently on startup
-  useEffect(() => {
-    Promise.all([
-      apiService.getLocations(1, 50),
-      apiService.getVehicleGroups(1, 50),
-      apiService.getChargesSettings(),
-    ]).then(([locRes, vgRes, csRes]) => {
-      if (locRes.success && locRes.result?.items) setLocations(locRes.result.items);
-      if (vgRes.success && vgRes.result?.items) setVehicleGroups(vgRes.result.items);
-      if (csRes.success && Array.isArray(csRes.result)) setChargesSettings(csRes.result);
-    });
-  }, []);
+  const lastFetchedUrlKeyRef = useRef<string | null>(null);
 
   // Resolve location name dynamically once locations load
   useEffect(() => {
-    if (customer.locationId && locations.length > 0 && !customer.locationName) {
+    if (customer.locationId && locations.length > 0) {
       const matched = locations.find((l) => l.id === customer.locationId);
-      if (matched) {
+      if (matched && customer.locationName !== matched.name) {
         setCustomer((prev) => ({ ...prev, locationName: matched.name }));
       }
     }
   }, [locations, customer.locationId, customer.locationName]);
 
+  const applyCustomerResultToState = useCallback(
+    async (c: CustomerDetailResult, fallbackMobile?: string, fallbackEmail?: string) => {
+      const fullName = [c.firstName, c.lastName].filter(Boolean).join(' ').trim();
+      const fallbackCardName = c.contactCards?.find((card) => card.nameOnCard)?.nameOnCard?.trim();
+      const displayName = fullName || c.name || fallbackCardName || c.email || '—';
+
+      let currentLocations = locations;
+      if (c.locationId && currentLocations.length === 0) {
+        const locRes = await apiService.getLocations(1, 50);
+        if (locRes.success && locRes.result?.items) {
+          currentLocations = locRes.result.items;
+          setLocations(currentLocations);
+        }
+      }
+
+      const matchedLoc = c.locationId ? currentLocations.find((l) => l.id === c.locationId) : undefined;
+      const docs = Array.isArray(c.identityDocuments) ? c.identityDocuments : [];
+      const cards = Array.isArray(c.contactCards) ? c.contactCards : [];
+
+      setCustomerCards(cards);
+      setCustomer({
+        id: c.id !== undefined && c.id !== null ? String(c.id) : '—',
+        tenantId: c.tenantId,
+        firstName: c.firstName,
+        lastName: c.lastName,
+        name: displayName,
+        avatarInitials: getInitials(displayName),
+        isVerified: docs.length > 0,
+        mobile: c.mobileNo || fallbackMobile || '—',
+        email: c.email || fallbackEmail || '—',
+        contactCategory: c.contactCategory ?? null,
+        locationId: c.locationId ?? null,
+        locationName: matchedLoc?.name || c.address?.city || undefined,
+        nationality: c.nationality ?? null,
+        dateOfBirth: c.dateOfBirth ?? null,
+        gender: c.gender ?? null,
+        address: c.address ?? null,
+        identityDocuments: docs,
+        contactCards: cards,
+        preferredLanguage: '—',
+        idLicenseStatus: docs.length > 0 ? 'Verified' : 'No docs',
+        openTicketsCount: 0,
+        activeRentalNo: undefined,
+        previousRentalNo: undefined,
+      });
+
+      const custId = c.id;
+      if (custId) {
+        const [openAgrRes, closedAgrRes, bookRes, voucherRes, depositRes, finesRes] =
+          await Promise.all([
+            apiService.getAgreements({ customerId: custId, status: 'Open' }),
+            apiService.getAgreements({ customerId: custId, status: 'Closed' }),
+            apiService.getBookings({ customerId: custId, status: 'Confirmed' }),
+            apiService.getVouchers({ customerId: custId }),
+            apiService.getDeposit({ customerId: custId }),
+            apiService.getTrafficFines({ customerId: custId }),
+          ]);
+
+        if (openAgrRes.success && openAgrRes.result?.items?.length) {
+          const first: AgreementItem = openAgrRes.result.items[0];
+          const [startDt, startTm] = (first.startDate || '').split('T');
+          const [endDt, endTm] = (first.endDate || '').split('T');
+          setCustomer((prev) => ({ ...prev, activeRentalNo: first.agreementNo }));
+          setActiveRental((prev) => ({
+            ...prev,
+            agreementNo: first.agreementNo,
+            pickupLocation: first.location || first.pickupLocation || '—',
+            returnLocation: first.location || first.pickupLocation || '—',
+            pickupDate: startDt || '—',
+            pickupTime: startTm ? startTm.slice(0, 5) : prev.pickupTime,
+            returnDate: endDt || '—',
+            returnTime: endTm ? endTm.slice(0, 5) : prev.returnTime,
+            totalCharges: first.totalCharges ?? 0,
+            rentalCharges: first.totalCharges ?? 0,
+            estimatedCharges: first.totalCharges ?? 0,
+            status: first.agreementStatus === 'Open' ? 'Active' : 'Returned',
+          }));
+        }
+
+        if (closedAgrRes.success && closedAgrRes.result?.items?.length) {
+          const prevAgr: AgreementItem = closedAgrRes.result.items[0];
+          const [startDt, startTm] = (prevAgr.startDate || '').split('T');
+          const [endDt, endTm] = (prevAgr.endDate || '').split('T');
+          setCustomer((prev) => ({ ...prev, previousRentalNo: prevAgr.agreementNo }));
+          setPreviousRental((prev) => ({
+            ...prev,
+            agreementNo: prevAgr.agreementNo,
+            pickupLocation: prevAgr.location || prevAgr.pickupLocation || '—',
+            returnLocation: prevAgr.location || prevAgr.pickupLocation || '—',
+            pickupDate: startDt || '—',
+            pickupTime: startTm ? startTm.slice(0, 5) : prev.pickupTime,
+            returnDate: endDt || '—',
+            returnTime: endTm ? endTm.slice(0, 5) : prev.returnTime,
+            totalCharges: prevAgr.totalCharges ?? prev.totalCharges,
+          }));
+        }
+
+        if (bookRes.success && bookRes.result?.items?.length) {
+          const book = bookRes.result.items[0];
+          const [startDt, startTm] = (book.startDate || '').split('T');
+          const [endDt, endTm] = (book.endDate || '').split('T');
+          setReservationQuote((prev) => ({
+            ...prev,
+            quoteNo: book.agreementNo || book.bookingNo || prev.quoteNo,
+            pickupDate: startDt || prev.pickupDate,
+            pickupTime: startTm ? startTm.slice(0, 5) : prev.pickupTime,
+            returnDate: endDt || prev.returnDate,
+            returnTime: endTm ? endTm.slice(0, 5) : prev.returnTime,
+            pickupLocation: book.location || prev.pickupLocation,
+            returnLocation: book.location || prev.returnLocation,
+            quoteBreakdown: {
+              ...prev.quoteBreakdown,
+              totalAmount: book.totalCharges ?? prev.quoteBreakdown.totalAmount,
+            },
+          }));
+        }
+
+        if (voucherRes.success && voucherRes.result?.items?.length) {
+          const items = voucherRes.result.items;
+          const invVoucher = items.find((v) => v.type === 1 || v.voucherTypesName === 'Invoice') || items[0];
+          const mappedTx = items.slice(0, 5).map((v) => ({
+            date: v.date ? v.date.split('T')[0] : '—',
+            refNo: v.voucherNo || String(v.id),
+            type: v.voucherTypesName || v.voucherSubTypeName || 'Voucher',
+            amount: v.amount ?? 0,
+            status: (v.isClosed ? 'Completed' : 'Pending Approval') as 'Completed' | 'Pending Approval' | 'Failed',
+            details: v.statusText || (v.isClosed ? 'Closed' : 'Open'),
+          }));
+
+          setBillingSummary((prev) => ({
+            ...prev,
+            transactions: mappedTx.length > 0 ? mappedTx : prev.transactions,
+          }));
+
+          if (invVoucher?.voucherNo) {
+            const invRes = await apiService.getInvoice(invVoucher.voucherNo);
+            if (invRes.success && invRes.result) {
+              const amt = invRes.result.amount ?? invVoucher.amount ?? 0;
+              const tax = invRes.result.tax ?? 0;
+              setBillingSummary((prev) => ({
+                ...prev,
+                invoiceNo: invRes.result.voucherNo,
+                invoiceTotal: amt,
+                amountPaid: amt,
+                vatAmount: tax,
+                totalInclVat: amt,
+              }));
+            }
+          }
+        }
+
+        if (depositRes.success && depositRes.result?.items?.length) {
+          const dep = depositRes.result.items[0];
+          setBillingSummary((prev) => ({
+            ...prev,
+            securityDeposit: Math.abs(dep.amountRemaining ?? dep.amountUsed ?? 0),
+            refundStatus: dep.isClosed ? 'Settled' : 'Pending Finance',
+          }));
+        }
+
+        if (finesRes.success && finesRes.result?.items?.length) {
+          const firstFine = finesRes.result.items[0];
+          const totalFine = finesRes.result.items.reduce(
+            (acc, f) => acc + (f.amountWithSurcharge || f.amount || 0),
+            0
+          );
+          setBillingSummary((prev) => ({
+            ...prev,
+            fines: {
+              amount: totalFine,
+              evidenceFile: firstFine.fineNo || '—',
+              status: firstFine.isPaid ? 'Paid' : 'Unpaid',
+            },
+          }));
+        }
+      }
+    },
+    [locations]
+  );
+
   const fetchCustomerData = useCallback(async () => {
     if (!urlMobile && !urlEmail) {
       return;
     }
+
+    const queryKey = `${urlMobile || ''}|${urlEmail || ''}`;
+    if (lastFetchedUrlKeyRef.current === queryKey) {
+      return;
+    }
+    lastFetchedUrlKeyRef.current = queryKey;
 
     setIsLoadingCustomer(true);
 
@@ -254,122 +473,9 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       });
 
       if (custRes.success && custRes.result) {
-        const c: CustomerDetailResult = custRes.result;
-        const fullName = [c.firstName, c.lastName].filter(Boolean).join(' ').trim();
-        const fallbackCardName = c.contactCards?.find((card) => card.nameOnCard)?.nameOnCard?.trim();
-        const displayName = fullName || c.name || fallbackCardName || c.email || `Customer #${c.id}`;
-        const matchedLoc = c.locationId ? locations.find((l) => l.id === c.locationId) : undefined;
-        const docs = Array.isArray(c.identityDocuments) ? c.identityDocuments : [];
-        const cards = Array.isArray(c.contactCards) ? c.contactCards : [];
-
-        setCustomerCards(cards);
-        setCustomer({
-          id: c.id !== undefined && c.id !== null ? String(c.id) : '—',
-          tenantId: c.tenantId,
-          firstName: c.firstName,
-          lastName: c.lastName,
-          name: displayName,
-          avatarInitials: getInitials(displayName),
-          isVerified: docs.length > 0,
-          mobile: c.mobileNo || urlMobile || '—',
-          email: c.email || urlEmail || '—',
-          contactCategory: c.contactCategory ?? null,
-          locationId: c.locationId ?? null,
-          locationName: matchedLoc?.name,
-          nationality: c.nationality ?? null,
-          dateOfBirth: c.dateOfBirth ?? null,
-          gender: c.gender ?? null,
-          address: c.address ?? null,
-          identityDocuments: docs,
-          contactCards: cards,
-          preferredLanguage: '—',
-          idLicenseStatus: docs.length > 0 ? 'Verified' : 'Not Provided',
-          openTicketsCount: 0,
-          activeRentalNo: undefined,
-          previousRentalNo: undefined,
-        });
-
-        const custId = c.id;
-        if (custId) {
-          const [openAgrRes, closedAgrRes, bookRes, voucherRes, depositRes, finesRes] =
-            await Promise.all([
-              apiService.getAgreements({ customerId: custId, status: 'Open' }),
-              apiService.getAgreements({ customerId: custId, status: 'Closed' }),
-              apiService.getBookings({ customerId: custId, status: 'Confirmed' }),
-              apiService.getVouchers({ customerId: custId }),
-              apiService.getDeposit({ customerId: custId }),
-              apiService.getTrafficFines({ customerId: custId }),
-            ]);
-
-          if (openAgrRes.success && openAgrRes.result?.items?.length) {
-            const first: AgreementItem = openAgrRes.result.items[0];
-            setCustomer((prev) => ({ ...prev, activeRentalNo: first.agreementNo }));
-            setActiveRental((prev) => ({
-              ...prev,
-              agreementNo: first.agreementNo,
-              pickupLocation: first.location || first.pickupLocation || '—',
-              pickupDate: first.startDate ? first.startDate.split('T')[0] : '—',
-              returnDate: first.endDate ? first.endDate.split('T')[0] : '—',
-              status: first.agreementStatus === 'Open' ? 'Active' : 'Returned',
-            }));
-          }
-
-          if (closedAgrRes.success && closedAgrRes.result?.items?.length) {
-            const prevAgr: AgreementItem = closedAgrRes.result.items[0];
-            setCustomer((prev) => ({ ...prev, previousRentalNo: prevAgr.agreementNo }));
-            setPreviousRental((prev) => ({
-              ...prev,
-              agreementNo: prevAgr.agreementNo,
-              pickupLocation: prevAgr.location || prevAgr.pickupLocation || '—',
-              pickupDate: prevAgr.startDate ? prevAgr.startDate.split('T')[0] : '—',
-              returnDate: prevAgr.endDate ? prevAgr.endDate.split('T')[0] : '—',
-            }));
-          }
-
-          if (bookRes.success && bookRes.result?.items?.length) {
-            const book = bookRes.result.items[0];
-            setReservationQuote((prev) => ({
-              ...prev,
-              quoteNo: book.agreementNo || book.bookingNo || prev.quoteNo,
-              pickupDate: book.startDate ? book.startDate.split('T')[0] : prev.pickupDate,
-              returnDate: book.endDate ? book.endDate.split('T')[0] : prev.returnDate,
-              pickupLocation: book.location || prev.pickupLocation,
-            }));
-          }
-
-          if (voucherRes.success && voucherRes.result?.items?.length) {
-            const invVoucher = voucherRes.result.items[0];
-            const invRes = await apiService.getInvoice(invVoucher.voucherNo);
-            if (invRes.success && invRes.result) {
-              setBillingSummary((prev) => ({
-                ...prev,
-                invoiceNo: invRes.result.voucherNo,
-                invoiceTotal: invRes.result.amount ?? prev.invoiceTotal,
-              }));
-            }
-          }
-
-          if (depositRes.success && depositRes.result?.items?.length) {
-            const dep = depositRes.result.items[0];
-            setBillingSummary((prev) => ({
-              ...prev,
-              securityDeposit: Math.abs(dep.amountRemaining ?? 0),
-            }));
-          }
-
-          if (finesRes.success && finesRes.result?.items?.length) {
-            const totalFine = finesRes.result.items.reduce((acc, f) => acc + (f.amount || 0), 0);
-            setBillingSummary((prev) => ({
-              ...prev,
-              fines: {
-                ...prev.fines,
-                amount: totalFine,
-              },
-            }));
-          }
-        }
+        await applyCustomerResultToState(custRes.result, urlMobile || undefined, urlEmail || undefined);
       } else {
-        // Customer lookup returned no record — clear hardcoded fields so nothing fake is shown
+        // Customer lookup returned no record — clear fields cleanly
         setCustomerCards([]);
         setCustomer({
           id: '—',
@@ -391,14 +497,13 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           identityDocuments: [],
           contactCards: [],
           preferredLanguage: '—',
-          idLicenseStatus: 'Not Provided',
+          idLicenseStatus: 'No docs',
           openTicketsCount: 0,
           activeRentalNo: undefined,
           previousRentalNo: undefined,
         });
       }
     } catch {
-      // Preserve searched parameters cleanly without exposing raw errors
       setCustomer((prev) => ({
         ...prev,
         mobile: urlMobile || prev.mobile,
@@ -407,7 +512,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     } finally {
       setIsLoadingCustomer(false);
     }
-  }, [urlMobile, urlEmail, locations]);
+  }, [urlMobile, urlEmail, applyCustomerResultToState]);
 
   useEffect(() => {
     fetchCustomerData();
@@ -486,7 +591,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     };
   };
 
-  const checkVehicleAvailability = async (vehicleGroupId = 31) => {
+  const checkVehicleAvailability = async (vehicleGroupId) => {
     const [vehRes, vgRes, locRes] = await Promise.all([
       apiService.getVehicles({ vehicleGroupId, pageNumber: 1 }),
       apiService.getVehicleGroups(1, 50),
@@ -648,6 +753,113 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }));
   };
 
+  const searchCustomer = async (query: string): Promise<{ success: boolean; message: string }> => {
+    const trimmed = query.trim();
+    if (!trimmed) return { success: false, message: 'Please enter an email or phone number' };
+
+    const isEmail = trimmed.includes('@');
+    const searchParam = isEmail ? { email: trimmed } : { mobileNo: trimmed };
+    const queryKey = isEmail ? `|${trimmed}` : `${trimmed}|`;
+    lastFetchedUrlKeyRef.current = queryKey;
+
+    setIsLoadingCustomer(true);
+    try {
+      const custRes = await apiService.getCustomerDetail(searchParam);
+      if (custRes.success && custRes.result) {
+        const c: CustomerDetailResult = custRes.result;
+        const fullName = [c.firstName, c.lastName].filter(Boolean).join(' ').trim();
+        const fallbackCardName = c.contactCards?.find((card) => card.nameOnCard)?.nameOnCard?.trim();
+        const displayName = fullName || c.name || fallbackCardName || c.email || 'Customer';
+
+        await applyCustomerResultToState(
+          c,
+          isEmail ? undefined : trimmed,
+          isEmail ? trimmed : undefined
+        );
+
+        setSearchParams((prev) => {
+          const next = new URLSearchParams(prev);
+          if (isEmail) {
+            next.set('email', trimmed);
+            next.delete('mobile');
+          } else {
+            next.set('mobile', trimmed);
+            next.delete('email');
+          }
+          return next;
+        });
+
+        return { success: true, message: `Loaded customer ${displayName}` };
+      }
+      return { success: false, message: `No record found for "${trimmed}"` };
+    } catch {
+      return { success: false, message: 'Network or lookup error' };
+    } finally {
+      setIsLoadingCustomer(false);
+    }
+  };
+
+  const resetCustomer = () => {
+    lastFetchedUrlKeyRef.current = null;
+    setCustomer(mockCustomer);
+    setCustomerCards(mockCustomer.contactCards || []);
+    setActiveRental(mockActiveRental);
+    setPreviousRental(mockPreviousRental);
+    setBillingSummary(mockBillingSummary);
+    setReservationQuote(mockReservationQuote);
+    setCaseDetails(mockCaseDetails);
+    setRoadsideAssistance(mockRoadsideAssistance);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('email');
+      next.delete('mobile');
+      return next;
+    });
+  };
+
+  const selectVehicleForQuote = (vehicle: { model: string; group: string; plateNo?: string; rate?: number }) => {
+    setReservationQuote((prev) => {
+      const newTotal = vehicle.rate ? vehicle.rate * (prev.rentalDays || 3) * 1.05 : prev.quoteBreakdown.totalAmount;
+      return {
+        ...prev,
+        vehicleGroup: vehicle.group,
+        vehicleSubtitle: `${vehicle.group} • ${vehicle.model}`,
+        vehicle: {
+          ...prev.vehicle,
+          model: vehicle.model,
+          group: vehicle.group,
+          plateNo: vehicle.plateNo || prev.vehicle.plateNo,
+        },
+        quoteBreakdown: {
+          ...prev.quoteBreakdown,
+          totalAmount: Math.round(newTotal),
+        },
+      };
+    });
+  };
+
+  const extendRentalAgreement = async (params: { newReturnDate: string; newReturnTime: string; additionalCharges: number; notes: string }) => {
+    setActiveRental((prev) => ({
+      ...prev,
+      returnDate: params.newReturnDate,
+      returnTime: params.newReturnTime,
+      totalCharges: (prev.totalCharges || 0) + params.additionalCharges,
+    }));
+    return { success: true, message: `Agreement ${activeRental.agreementNo} extended to ${params.newReturnDate}` };
+  };
+
+  const processEarlyReturn = async (params: { returnDate: string; returnTime: string; locationId: number; returnOdometer: number; fuelLevel: string }) => {
+    const loc = locations.find((l) => l.id === params.locationId);
+    setActiveRental((prev) => ({
+      ...prev,
+      returnDate: params.returnDate,
+      returnTime: params.returnTime,
+      returnLocation: loc?.name || prev.returnLocation,
+      status: 'Returned',
+    }));
+    return { success: true, message: `Agreement ${activeRental.agreementNo} check-in recorded at ${loc?.name || 'Branch'}` };
+  };
+
   return (
     <WorkspaceContext.Provider
       value={{
@@ -694,6 +906,23 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         setIsTransferOpen,
         isCustomerEditOpen,
         setIsCustomerEditOpen,
+        isAddCardOpen,
+        setIsAddCardOpen,
+        editingCard,
+        openEditCardModal,
+        isDocDrawerOpen,
+        setIsDocDrawerOpen,
+        isFleetPickerOpen,
+        setIsFleetPickerOpen,
+        isExtensionOpen,
+        setIsExtensionOpen,
+        isReturnOpen,
+        setIsReturnOpen,
+        searchCustomer,
+        resetCustomer,
+        selectVehicleForQuote,
+        extendRentalAgreement,
+        processEarlyReturn,
         addCaseReply,
         updateRoadsideStep,
         updateCaseStatus,

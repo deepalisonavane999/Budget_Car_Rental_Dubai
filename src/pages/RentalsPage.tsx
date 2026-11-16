@@ -1,12 +1,18 @@
 import React, { useState } from 'react';
-import { MoreHorizontal, ChevronRight, FileText, Car } from 'lucide-react';
+import { MoreHorizontal, ChevronRight, FileText, Car, CalendarPlus, CheckCircle2 } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { Badge } from '../components/common/Badge';
 import { CommunicationDock } from '../components/communication/CommunicationDock';
 import { useNavigate } from 'react-router-dom';
 
 export const RentalsPage: React.FC = () => {
-  const { activeRental, previousRental, commMode } = useWorkspace();
+  const {
+    activeRental,
+    previousRental,
+    commMode,
+    setIsExtensionOpen,
+    setIsReturnOpen,
+  } = useWorkspace();
   const navigate = useNavigate();
   const [agreementModalOpen, setAgreementModalOpen] = useState(false);
 
@@ -22,21 +28,34 @@ export const RentalsPage: React.FC = () => {
               <h2 className="text-xs font-bold text-slate-900 tracking-tight">
                 Active Rental — {activeRental.agreementNo}
               </h2>
-              <Badge variant="green" className="text-[10px] py-0 px-1.5">
-                Active
+              <Badge variant={activeRental.status === 'Active' ? 'green' : 'gray'} className="text-[10px] py-0 px-1.5">
+                {activeRental.status}
               </Badge>
             </div>
 
             <div className="flex items-center space-x-1.5">
               <button
-                onClick={() => setAgreementModalOpen(true)}
-                className="px-2 py-0.5 bg-white hover:bg-slate-50 border border-blue-600 text-blue-600 rounded text-[10px] font-semibold flex items-center space-x-1 transition-colors"
+                onClick={() => setIsExtensionOpen(true)}
+                className="px-2 py-0.5 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 rounded text-[10px] font-semibold flex items-center space-x-1 transition-colors"
+                title="Request rental extension"
               >
-                <FileText className="w-3 h-3" />
-                <span>View Rental Agreement</span>
+                <CalendarPlus className="w-3 h-3 text-blue-600" />
+                <span>Extend Rental</span>
               </button>
-              <button className="p-0.5 text-slate-400 hover:text-slate-600 rounded border border-slate-200">
-                <MoreHorizontal className="w-3 h-3" />
+              <button
+                onClick={() => setIsReturnOpen(true)}
+                className="px-2 py-0.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 rounded text-[10px] font-semibold flex items-center space-x-1 transition-colors"
+                title="Process check-in or early return"
+              >
+                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                <span>Early Return</span>
+              </button>
+              <button
+                onClick={() => setAgreementModalOpen(true)}
+                className="px-2 py-0.5 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 rounded text-[10px] font-semibold flex items-center space-x-1 transition-colors"
+              >
+                <FileText className="w-3 h-3 text-slate-500" />
+                <span>Agreement Details</span>
               </button>
             </div>
           </div>

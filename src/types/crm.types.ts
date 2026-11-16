@@ -35,7 +35,7 @@ export interface CustomerProfile {
   identityDocuments?: any[];
   contactCards?: CustomerCard[];
   preferredLanguage: string;
-  idLicenseStatus: 'Verified' | 'Pending' | 'Expired' | 'Not Provided';
+  idLicenseStatus: 'Verified' | 'Pending' | 'Expired' | 'No docs' | 'Not Provided';
   activeRentalNo?: string;
   previousRentalNo?: string;
   openTicketsCount: number;
@@ -128,6 +128,7 @@ export interface ReservationQuote {
     bags: number;
     transmission: string;
     image: string;
+    plateNo?: string;
   };
   quoteBreakdown: {
     rentalCharges: number;

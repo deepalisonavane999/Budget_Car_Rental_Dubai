@@ -48,6 +48,8 @@ export const CustomerSidebar: React.FC = () => {
     toggleLeftSidebar,
     isLoadingCustomer,
     refreshCustomerData,
+    openEditCardModal,
+    setIsDocDrawerOpen,
   } = useWorkspace();
   const navigate = useNavigate();
 
@@ -144,13 +146,11 @@ export const CustomerSidebar: React.FC = () => {
                 <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" />
                 <span>Verified Customer</span>
               </span>
-            ) : (
+            ) : formatCategory(customer.contactCategory) !== '—' ? (
               <span className="inline-flex items-center px-1.5 py-0.2 rounded-full text-[9px] font-medium bg-slate-100 text-slate-600 mt-0.5">
-                {formatCategory(customer.contactCategory) !== '—'
-                  ? formatCategory(customer.contactCategory)
-                  : customer.idLicenseStatus}
+                {formatCategory(customer.contactCategory)}
               </span>
-            )}
+            ) : null}
           </div>
         </div>
 
@@ -212,15 +212,19 @@ export const CustomerSidebar: React.FC = () => {
 
           <div className="flex justify-between items-center py-0.5 border-b border-slate-50">
             <span className="text-slate-400">Identity Docs</span>
-            <span
-              className={`font-medium ${
-                docsCount > 0 || customer.idLicenseStatus === 'Verified'
-                  ? 'text-emerald-700'
-                  : 'text-slate-500'
-              }`}
-            >
-              {docsCount > 0 ? `${docsCount} Verified` : customer.idLicenseStatus}
-            </span>
+            {docsCount > 0 ? (
+              <button
+                type="button"
+                onClick={() => setIsDocDrawerOpen(true)}
+                className="text-[10px] font-medium text-blue-600 hover:text-blue-800 hover:underline flex items-center space-x-1"
+                title="Click to view identity documents"
+              >
+                <span>{docsCount} {docsCount === 1 ? 'Doc' : 'Docs'}</span>
+                <ExternalLink className="w-2.5 h-2.5 text-blue-600" />
+              </button>
+            ) : (
+              <span className="text-[10px] font-medium text-slate-500">No docs</span>
+            )}
           </div>
 
           {/* Address */}
@@ -248,12 +252,12 @@ export const CustomerSidebar: React.FC = () => {
             </div>
             {cards.length > 0 ? (
               <div className="space-y-0.5">
-                {cards.slice(0, 2).map((card, idx) => (
+                {cards.map((card, idx) => (
                   <div
                     key={card.id ?? idx}
                     className="flex items-center justify-between bg-slate-50 border border-slate-100 rounded px-1.5 py-0.5 text-[9px]"
                   >
-                    <div className="min-w-0">
+                    <div className="min-w-0 truncate">
                       <span className="font-mono font-bold text-slate-800">
                         •••• {card.cardNoLastFourDigits}
                       </span>
@@ -261,9 +265,19 @@ export const CustomerSidebar: React.FC = () => {
                         {card.bankName || card.nameOnCard || ''}
                       </span>
                     </div>
-                    <span className="font-mono text-slate-500 shrink-0 ml-1">
-                      {formatExpiry(card.expiry)}
-                    </span>
+                    <div className="flex items-center space-x-1.5 shrink-0 ml-1">
+                      <span className="font-mono text-slate-500">
+                        {formatExpiry(card.expiry)}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => openEditCardModal(card)}
+                        className="text-blue-600 hover:text-blue-800 font-semibold hover:underline"
+                        title="Update this card"
+                      >
+                        Update
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>

@@ -17,7 +17,7 @@ import { CaseDetails } from '../types/crm.types';
 import { useNavigate } from 'react-router-dom';
 
 export const CasesPage: React.FC = () => {
-  const { caseDetails, updateCaseStatus, addCaseReply, agentName, agentInitials } =
+  const { customer, caseDetails, updateCaseStatus, addCaseReply, agentName, agentInitials } =
     useWorkspace();
   const navigate = useNavigate();
 
@@ -27,13 +27,13 @@ export const CasesPage: React.FC = () => {
 
   const [replyMode, setReplyMode] = useState<'customer' | 'internal'>('customer');
   const [composerText, setComposerText] = useState(
-    `Dear Mr. Ahmed Khalid,\nThank you for contacting us regarding your deposit refund for RA-20301. We are currently checking the status with our Finance team and will update you by today at 16:00.\n\nBest regards,\n${agentName}\nAGMC | Budget Rent a Car`
+    `Dear ${customer.name},\nThank you for contacting us regarding your deposit refund for ${caseDetails.relatedRentalNo}. We are currently checking the status with our Finance team and will update you by today at 16:00.\n\nBest regards,\n${agentName}\nAGMC | Budget Rent a Car`
   );
   const [templateSelected, setTemplateSelected] = useState('');
 
   const templates: Record<string, string> = {
-    refund_status: `Dear Mr. Ahmed Khalid,\nThank you for contacting us regarding your deposit refund for RA-20301. We are currently checking the status with our Finance team and will update you by today at 16:00.\n\nBest regards,\n${agentName}\nAGMC | Budget Rent a Car`,
-    sla_extension: `Dear Mr. Ahmed Khalid,\nWe require an additional 24 hours to finalize reconciliation with the banking provider. We will follow up with you tomorrow morning.\n\nBest regards,\n${agentName}`,
+    refund_status: `Dear ${customer.name},\nThank you for contacting us regarding your deposit refund for ${caseDetails.relatedRentalNo}. We are currently checking the status with our Finance team and will update you by today at 16:00.\n\nBest regards,\n${agentName}\nAGMC | Budget Rent a Car`,
+    sla_extension: `Dear ${customer.name},\nWe require an additional 24 hours to finalize reconciliation with the banking provider. We will follow up with you tomorrow morning.\n\nBest regards,\n${agentName}`,
   };
 
   const handleTemplateChange = (e: React.ChangeEvent<HTMLSelectElement>) => {

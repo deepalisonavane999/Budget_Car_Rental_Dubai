@@ -16,9 +16,11 @@ import {
 } from 'lucide-react';
 import { useWorkspace, OperationsSubTab } from '../context/WorkspaceContext';
 import { CommunicationDock } from '../components/communication/CommunicationDock';
+import { AccidentReportView } from '../components/operations/AccidentReportView';
 
 export const OperationsPage: React.FC = () => {
   const {
+    customer,
     roadsideAssistance,
     updateRoadsideStep,
     operationsSubTab,
@@ -32,6 +34,7 @@ export const OperationsPage: React.FC = () => {
 
   const subTabs: { id: OperationsSubTab; label: string; icon: any }[] = [
     { id: 'roadside', label: 'Roadside Assistance', icon: Navigation },
+    { id: 'accidents', label: 'Accidents / Police Reports', icon: AlertTriangle },
     { id: 'maintenance', label: 'Maintenance', icon: Wrench },
     { id: 'replacement', label: 'Replacement', icon: RotateCcw },
     { id: 'delivery', label: 'Delivery / Collection', icon: Truck },
@@ -77,7 +80,10 @@ export const OperationsPage: React.FC = () => {
           })}
         </div>
 
-        {/* Roadside Assistance Request Card */}
+        {/* Operations Content Area */}
+        {operationsSubTab === 'accidents' ? (
+          <AccidentReportView />
+        ) : (
         <div className="bg-white border border-slate-200 rounded p-2 shadow-2xs space-y-1.5">
           {/* Header */}
           <div className="flex items-center justify-between pb-1 border-b border-slate-100">
@@ -154,7 +160,7 @@ export const OperationsPage: React.FC = () => {
               <span className="text-slate-400 block text-[9px]">Callback</span>
               <div className="flex items-center space-x-1 font-mono font-bold text-slate-800">
                 <Phone className="w-2.5 h-2.5 text-blue-600 shrink-0" />
-                <span>+971 50 *** 1234</span>
+                <span>{customer.mobile && customer.mobile !== '—' ? customer.mobile : roadsideAssistance.callbackNumber}</span>
               </div>
             </div>
           </div>
@@ -257,6 +263,7 @@ export const OperationsPage: React.FC = () => {
             <span className="text-emerald-700 font-bold block text-[10px] animate-fade-in">{toastMsg}</span>
           )}
         </div>
+        )}
       </div>
 
       {/* Lower Area: Customer Communication Dock with Outbound Variant */}

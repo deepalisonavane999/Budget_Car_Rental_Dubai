@@ -14,7 +14,7 @@ export const EmailCommunication: React.FC<EmailCommProps> = ({ showWrapUp = fals
     'Customer called earlier about refund. Confirmed identity and explained ticket FIN-10482 is with Finance.'
   );
   const [replyText, setReplyText] = useState(
-    `Dear Ahmed,\nWe are following up with Finance on ticket FIN-10482 and will update you by 16:00 today.\n\nKind regards,\n${agentName}`
+    `Dear ${customer.name},\nWe are following up with Finance on ticket FIN-10482 and will update you by 16:00 today.\n\nKind regards,\n${agentName}`
   );
   const [hasAttachment, setHasAttachment] = useState(true);
   const [isSent, setIsSent] = useState(false);
@@ -30,7 +30,7 @@ export const EmailCommunication: React.FC<EmailCommProps> = ({ showWrapUp = fals
       date: '8 Oct 2026',
       from: `${customer.name} <${customer.email}>`,
       to: 'care@budget-uae.com',
-      body: `Dear Team,\nI would like to follow up on the status of my security deposit refund for rental agreement RA-20301 (returned on 5 Oct 2026). Could you please confirm when it will be processed?\nThank you, Ahmed Khalid`,
+      body: `Dear Team,\nI would like to follow up on the status of my security deposit refund for rental agreement RA-20301 (returned on 5 Oct 2026). Could you please confirm when it will be processed?\nThank you, ${customer.name}`,
       ticketLink: 'FIN-10482',
     },
     {
@@ -41,7 +41,7 @@ export const EmailCommunication: React.FC<EmailCommProps> = ({ showWrapUp = fals
       date: '5 Oct 2026',
       from: `${customer.name} <${customer.email}>`,
       to: 'care@budget-uae.com',
-      body: `Hello,\nThank you for sending the rental agreement documents.\nRegards, Ahmed`,
+      body: `Hello,\nThank you for sending the rental agreement documents.\nRegards, ${customer.name}`,
       ticketLink: null,
     },
   ];
