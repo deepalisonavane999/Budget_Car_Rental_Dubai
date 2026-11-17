@@ -1,37 +1,54 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AlertTriangle, FileText, Search, CheckCircle2, Car } from 'lucide-react';
 import { useWorkspace } from '../../context/WorkspaceContext';
 import { apiService, AccidentResult } from '../../services/apiService';
+import { useSearchParams } from 'react-router-dom';
+/*
+// Hardcoded fallback response commented as requested:
 import { collectionAccidentResponse } from '../../services/mockDataAccCollection';
+*/
 
 export const AccidentReportView: React.FC = () => {
-  const { customer } = useWorkspace();
-  const [plateQuery, setPlateQuery] = useState('32849-EE-DXB');
+  const { customer, activeRental, previousRental } = useWorkspace();
+  const [searchParams] = useSearchParams();
+  const urlPlate = searchParams.get('plate');
+  const defaultPlate = urlPlate || activeRental?.vehicle?.plateNo || previousRental?.vehicle?.plateNo || '32849-EE-DXB';
+
+  const [plateQuery, setPlateQuery] = useState(defaultPlate);
   const [loading, setLoading] = useState(false);
-  const [accidentRecord, setAccidentRecord] = useState<(AccidentResult & Record<string, any>) | null>(
-    collectionAccidentResponse
-  );
+  const [accidentRecord, setAccidentRecord] = useState<(AccidentResult & Record<string, any>) | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
 
   const fetchAccident = async (targetPlate: string) => {
+    if (!targetPlate.trim()) return;
     setLoading(true);
     setFeedback(null);
     try {
       const res = await apiService.getAccident({
-        plateNo: targetPlate,
-        customerId: Number(customer.id) || undefined,
+        plateNo: targetPlate.trim(),
       });
       if (res.success && res.result) {
         setAccidentRecord(res.result);
       } else {
-        setAccidentRecord(collectionAccidentResponse);
+        setAccidentRecord(null);
+        setFeedback(res.error || `No accident or police report on file for plate "${targetPlate}".`);
       }
     } catch {
+      setAccidentRecord(null);
       setFeedback('Unable to query accident records right now.');
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (urlPlate) {
+      setPlateQuery(urlPlate);
+      fetchAccident(urlPlate);
+    } else if (defaultPlate) {
+      fetchAccident(defaultPlate);
+    }
+  }, [urlPlate]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();

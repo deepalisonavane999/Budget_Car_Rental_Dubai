@@ -17,7 +17,7 @@ import { CaseDetails } from '../types/crm.types';
 import { useNavigate } from 'react-router-dom';
 
 export const CasesPage: React.FC = () => {
-  const { customer, caseDetails, updateCaseStatus, addCaseReply, agentName, agentInitials } =
+  const { customer, caseDetails, updateCaseStatus, addCaseReply, agentName, agentInitials, setActiveNavTab } =
     useWorkspace();
   const navigate = useNavigate();
 
@@ -93,7 +93,7 @@ export const CasesPage: React.FC = () => {
           <div>
             <span className="text-slate-400 block">Related Rental</span>
             <button
-              onClick={() => navigate('/billing')}
+              onClick={() => setActiveNavTab('billing')}
               className="font-bold text-blue-600 hover:underline block text-left text-[11px]"
             >
               {caseDetails.relatedRentalNo}

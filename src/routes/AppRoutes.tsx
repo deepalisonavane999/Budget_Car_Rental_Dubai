@@ -1,5 +1,5 @@
 import React, { lazy } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AppLayout } from '../components/layout/AppLayout';
 
 // Optimized Lazy Loaded Page Components
@@ -19,19 +19,24 @@ const CasesPage = lazy(() =>
   import('../pages/CasesPage').then((m) => ({ default: m.CasesPage }))
 );
 
+const RedirectToRentals: React.FC = () => {
+  const location = useLocation();
+  return <Navigate to={`/rentals${location.search}`} replace />;
+};
+
 export const AppRoutes: React.FC = () => {
   return (
     <Routes>
       <Route path="/" element={<AppLayout />}>
-        {/* Default route redirects to rentals */}
-        <Route index element={<Navigate to="/rentals" replace />} />
+        {/* Default route redirects to rentals, preserving search query */}
+        <Route index element={<RedirectToRentals />} />
         <Route path="rentals" element={<RentalsPage />} />
         <Route path="reservations" element={<ReservationsPage />} />
         <Route path="billing" element={<BillingPage />} />
         <Route path="operations" element={<OperationsPage />} />
         <Route path="cases" element={<CasesPage />} />
-        {/* Catch-all redirect to rentals to avoid 404 on refresh */}
-        <Route path="*" element={<Navigate to="/rentals" replace />} />
+        {/* Catch-all redirect to rentals to avoid 404 on refresh, preserving search query */}
+        <Route path="*" element={<RedirectToRentals />} />
       </Route>
     </Routes>
   );

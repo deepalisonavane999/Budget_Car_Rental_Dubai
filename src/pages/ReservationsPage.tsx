@@ -11,6 +11,7 @@ import {
   Car,
 } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
+import { apiService } from '../services/apiService';
 import { Badge } from '../components/common/Badge';
 import { CommunicationDock } from '../components/communication/CommunicationDock';
 // import { mockLeadHistory } from '../services/mockData';
@@ -25,6 +26,7 @@ export const ReservationsPage: React.FC = () => {
     confirmReservationBooking,
     cancelReservationBooking,
     setIsFleetPickerOpen,
+    setVehicleGroups,
   } = useWorkspace();
   const [leadHistory] = useState(mockLeadHistory);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
@@ -37,9 +39,16 @@ export const ReservationsPage: React.FC = () => {
 
   const handleCheckAvailability = async () => {
     setIsBusy(true);
-    const res = await checkVehicleAvailability();
+    try {
+      const vgRes = await apiService.getVehicleGroups(1, 50);
+      if (vgRes.success && vgRes.result?.items) {
+        setVehicleGroups(vgRes.result.items);
+      }
+    } catch {
+      // ignore
+    }
     setIsBusy(false);
-    triggerNotice(res.message);
+    setIsFleetPickerOpen(true);
   };
 
   const handleCreateBooking = async () => {

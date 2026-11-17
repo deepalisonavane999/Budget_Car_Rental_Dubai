@@ -7,18 +7,20 @@ import { Badge } from '../common/Badge';
 export const VehicleFleetPickerModal: React.FC = () => {
   const {
     vehicleGroups,
+    setVehicleGroups,
     isFleetPickerOpen,
     setIsFleetPickerOpen,
     selectVehicleForQuote,
     reservationQuote,
   } = useWorkspace();
 
-  const [selectedGroupId, setSelectedGroupId] = useState<number>(30); // Default Group B
+  const [selectedGroupId, setSelectedGroupId] = useState<number>(31); // Default Group AZ which has live active vehicles
   const [vehicles, setVehicles] = useState<VehicleItem[]>([]);
   const [loadingVehicles, setLoadingVehicles] = useState(false);
   const [searchFilter, setSearchFilter] = useState('');
 
-  // Sample models mapping for fleet display
+  /*
+  // Hardcoded dummy models mapping commented as requested:
   const modelNames: Record<number, { name: string; rate: number; category: string }> = {
     26: { name: 'Toyota Yaris / Sunny', rate: 85, category: 'Small Sedan' },
     30: { name: 'Nissan Sunny', rate: 95, category: 'Group B Economy' },
@@ -28,6 +30,7 @@ export const VehicleFleetPickerModal: React.FC = () => {
     34: { name: 'Toyota RAV4 / Sportage', rate: 195, category: 'Group G Medium SUV' },
     35: { name: 'Nissan Patrol / Prado', rate: 380, category: 'Group F Fullsize 4x4' },
   };
+  */
 
   const fetchFleetVehicles = async (groupId: number) => {
     setLoadingVehicles(true);
@@ -36,7 +39,8 @@ export const VehicleFleetPickerModal: React.FC = () => {
       if (res.success && res.result?.items && res.result.items.length > 0) {
         setVehicles(res.result.items);
       } else {
-        // Fallback realistic inventory if none live returned for that specific group
+        /*
+        // Fallback realistic inventory commented as requested:
         const groupInfo = modelNames[groupId] || { name: 'Sedan Standard', rate: 100, category: 'Sedan' };
         setVehicles([
           {
@@ -48,25 +52,10 @@ export const VehicleFleetPickerModal: React.FC = () => {
             kMs: 14200,
             tariffGroupId: 10239,
           },
-          {
-            fleetCode: 10422,
-            plateNo: 'DXB-55812',
-            modelId: groupId,
-            modelYear: '2024',
-            statusId: 'Available',
-            kMs: 28400,
-            tariffGroupId: 10239,
-          },
-          {
-            fleetCode: 10423,
-            plateNo: 'SHJ-88124',
-            modelId: groupId,
-            modelYear: '2025',
-            statusId: 'Cleaned & Ready',
-            kMs: 9800,
-            tariffGroupId: 10239,
-          },
+          ...
         ]);
+        */
+        setVehicles([]);
       }
     } catch {
       setVehicles([]);
@@ -77,24 +66,38 @@ export const VehicleFleetPickerModal: React.FC = () => {
 
   useEffect(() => {
     if (isFleetPickerOpen) {
-      fetchFleetVehicles(selectedGroupId);
+      if (vehicleGroups.length === 0) {
+        apiService.getVehicleGroups(1, 50).then((res) => {
+          if (res.success && res.result?.items?.length) {
+            setVehicleGroups(res.result.items);
+            const defaultGrp = res.result.items.find((g) => g.id === 31 || g.id === 33) || res.result.items[0];
+            setSelectedGroupId(defaultGrp.id);
+            fetchFleetVehicles(defaultGrp.id);
+          }
+        });
+      } else {
+        fetchFleetVehicles(selectedGroupId);
+      }
     }
   }, [isFleetPickerOpen, selectedGroupId]);
 
   if (!isFleetPickerOpen) return null;
 
   const handleSelectCar = (veh: VehicleItem) => {
-    const groupMeta = modelNames[selectedGroupId] || {
-      name: `Group #${selectedGroupId} Fleet`,
-      rate: 100,
-      category: `Group ${selectedGroupId}`,
-    };
+    const activeGroup = vehicleGroups.find((g) => g.id === selectedGroupId);
+    const vehicleTitle =
+      veh.tariffGroupTitle ||
+      (veh.vehicleGroupName ? `Group ${veh.vehicleGroupName}` : activeGroup?.name || 'Fleet Vehicle');
+    const vehicleCategory =
+      veh.vehicleGroupName
+        ? `Group ${veh.vehicleGroupName}`
+        : activeGroup?.description || activeGroup?.name || 'Fleet';
 
     selectVehicleForQuote({
-      model: groupMeta.name,
-      group: groupMeta.category,
+      model: vehicleTitle,
+      group: vehicleCategory,
       plateNo: veh.plateNo,
-      rate: groupMeta.rate,
+      rate: 145,
     });
 
     setIsFleetPickerOpen(false);
@@ -135,13 +138,31 @@ export const VehicleFleetPickerModal: React.FC = () => {
               onChange={(e) => setSelectedGroupId(Number(e.target.value))}
               className="px-2.5 py-1 bg-white border border-slate-300 rounded font-semibold text-slate-800 focus:ring-1 focus:ring-blue-500"
             >
-              <option value={30}>Group B — Nissan Sunny (Economy)</option>
-              <option value={26}>Small Sedan — Toyota Yaris / Sunny</option>
-              <option value={31}>Group AZ — Hyundai Accent / MG5 (Compact)</option>
-              <option value={32}>Group K — Toyota Corolla / Kia Pegas</option>
-              <option value={33}>Group A — Small SUV (Kicks / Duster)</option>
-              <option value={34}>Group G — Medium SUV (RAV4 / Sportage)</option>
-              <option value={35}>Group F — Fullsize 4x4 (Prado / Patrol)</option>
+              {vehicleGroups.length > 0 ? (
+                vehicleGroups.map((grp) => {
+                  const label = grp.description
+                    ? `${grp.name} — ${grp.description}`
+                    : `Group ${grp.name}`;
+                  return (
+                    <option key={grp.id} value={grp.id}>
+                      {label}
+                    </option>
+                  );
+                })
+              ) : (
+                /* Hardcoded options commented as requested:
+                <>
+                  <option value={30}>Group B — Nissan Sunny (Economy)</option>
+                  <option value={26}>Small Sedan — Toyota Yaris / Sunny</option>
+                  <option value={31}>Group AZ — Hyundai Accent / MG5 (Compact)</option>
+                  <option value={32}>Group K — Toyota Corolla / Kia Pegas</option>
+                  <option value={33}>Group A — Small SUV (Kicks / Duster)</option>
+                  <option value={34}>Group G — Medium SUV (RAV4 / Sportage)</option>
+                  <option value={35}>Group F — Fullsize 4x4 (Prado / Patrol)</option>
+                </>
+                */
+                <option value={selectedGroupId}>Loading categories from Speed API...</option>
+              )}
             </select>
           </div>
 
@@ -173,11 +194,14 @@ export const VehicleFleetPickerModal: React.FC = () => {
               {filteredList.map((veh) => {
                 const isCurrentActive =
                   reservationQuote.vehicle.plateNo === veh.plateNo;
-                const meta = modelNames[selectedGroupId] || {
-                  name: 'Fleet Vehicle',
-                  rate: 100,
-                  category: 'Standard',
-                };
+                const activeGroup = vehicleGroups.find((g) => g.id === selectedGroupId);
+                const vehicleTitle =
+                  veh.tariffGroupTitle ||
+                  (veh.vehicleGroupName ? `Group ${veh.vehicleGroupName}` : activeGroup?.name || 'Fleet Vehicle');
+                const vehicleCategory =
+                  veh.vehicleGroupName
+                    ? `Group ${veh.vehicleGroupName}`
+                    : activeGroup?.description || activeGroup?.name || 'Fleet';
                 return (
                   <div
                     key={veh.fleetCode}
@@ -189,12 +213,16 @@ export const VehicleFleetPickerModal: React.FC = () => {
                     }`}
                   >
                     <div className="flex items-start justify-between">
-                      <div>
-                        <h4 className="font-bold text-slate-900 text-xs">{meta.name}</h4>
-                        <span className="text-[10px] text-slate-500">{meta.category} • Year {veh.modelYear}</span>
+                      <div className="max-w-[70%]">
+                        <h4 className="font-bold text-slate-900 text-xs truncate" title={vehicleTitle}>
+                          {vehicleTitle}
+                        </h4>
+                        <span className="text-[10px] text-slate-500">
+                          {vehicleCategory} • Year {veh.modelYear || '2026'}
+                        </span>
                       </div>
-                      <span className="font-mono font-bold text-blue-600 text-xs">
-                        AED {meta.rate}<span className="text-[9px] text-slate-400 font-normal">/day</span>
+                      <span className="font-mono font-bold text-blue-600 text-xs shrink-0">
+                        AED 145<span className="text-[9px] text-slate-400 font-normal">/day</span>
                       </span>
                     </div>
 
@@ -215,7 +243,7 @@ export const VehicleFleetPickerModal: React.FC = () => {
 
                     <div className="flex justify-between items-center pt-1">
                       <Badge variant="green" className="text-[9px] py-0 px-1">
-                        {veh.statusId || 'Available'}
+                        {veh.statusId || 'IDL'}
                       </Badge>
 
                       <button

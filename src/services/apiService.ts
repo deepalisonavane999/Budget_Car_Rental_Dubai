@@ -172,6 +172,9 @@ export interface VehicleItem {
   kMs: number;
   tariffGroupId?: number;
   locationId?: number;
+  tariffGroupTitle?: string;
+  vehicleGroupName?: string;
+  vehicleGroupId?: number;
 }
 
 export interface AccidentResult {
@@ -181,6 +184,11 @@ export interface AccidentResult {
   movementId: number;
   whosFault?: number;
   isPoliceReport?: boolean;
+  policeReportNo?: string;
+  state?: string;
+  excessAmount?: number;
+  invoiceId?: number;
+  calcDetail?: string;
   movement?: {
     refNo?: string;
     contact?: {
@@ -188,6 +196,14 @@ export interface AccidentResult {
       name: string;
     };
   };
+  documents?: Array<{
+    id: number;
+    name: string;
+    url: string;
+    guid?: string;
+    documentType?: number;
+    accidentId?: number;
+  }>;
 }
 
 export interface LocationItem {
@@ -449,10 +465,15 @@ export class BudgetApiService {
     fromDate?: string;
     toDate?: string;
   }): Promise<ApiResponse<{ totalCount: number; items: BookingItem[] }>> {
+    const validCustomerId =
+      typeof params.customerId === 'number' && !isNaN(params.customerId) && params.customerId > 0
+        ? params.customerId
+        : 0;
+
     const payload: Record<string, any> = {
-      CustomerId: params.customerId ?? 0,
+      CustomerId: validCustomerId,
       BookingConfirmationNumber: params.bookingConfirmationNumber ?? '',
-      BookingStatus: params.status || 'Closed',
+      BookingStatus: params.status || (params.bookingNo ? 'NA' : 'Closed'),
       FromDate: params.fromDate || '2000-12-11T16:00:00',
       ToDate: params.toDate || '2026-12-13T15:59:00',
     };
@@ -471,10 +492,15 @@ export class BudgetApiService {
     fromDate?: string;
     toDate?: string;
   }): Promise<ApiResponse<{ totalCount: number; items: AgreementItem[] }>> {
+    const validCustomerId =
+      typeof params.customerId === 'number' && !isNaN(params.customerId) && params.customerId > 0
+        ? params.customerId
+        : 0;
+
     const payload: Record<string, any> = {
       ManualAgreementNo: params.manualAgreementNo ?? '',
-      CustomerId: params.customerId ?? 0,
-      Status: params.status || 'Open',
+      CustomerId: validCustomerId,
+      Status: params.status || (params.agreementNo ? 'NA' : 'Open'),
       FromDate: params.fromDate || '2000-12-11T16:00:00',
       ToDate: params.toDate || '2026-12-13T15:59:00',
     };

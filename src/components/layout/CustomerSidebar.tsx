@@ -50,6 +50,7 @@ export const CustomerSidebar: React.FC = () => {
     refreshCustomerData,
     openEditCardModal,
     setIsDocDrawerOpen,
+    setActiveNavTab,
   } = useWorkspace();
   const navigate = useNavigate();
 
@@ -291,7 +292,7 @@ export const CustomerSidebar: React.FC = () => {
             <div className="flex justify-between items-center py-0.5 border-b border-slate-50">
               <span className="text-slate-400">Active Rental</span>
               <button
-                onClick={() => navigate('/rentals')}
+                onClick={() => setActiveNavTab('rentals')}
                 className="font-semibold text-blue-600 hover:text-blue-800 hover:underline"
               >
                 {customer.activeRentalNo}
@@ -303,7 +304,7 @@ export const CustomerSidebar: React.FC = () => {
             <div className="flex justify-between items-center py-0.5 border-b border-slate-50">
               <span className="text-slate-400">Previous Rental</span>
               <button
-                onClick={() => navigate('/billing')}
+                onClick={() => setActiveNavTab('billing')}
                 className="font-medium text-slate-700 hover:text-blue-600 hover:underline text-right"
               >
                 {customer.previousRentalNo}
@@ -316,7 +317,7 @@ export const CustomerSidebar: React.FC = () => {
             <div className="flex items-center space-x-1.5">
               <span className="font-bold text-slate-900">{customer.openTicketsCount}</span>
               <button
-                onClick={() => navigate('/cases')}
+                onClick={() => setActiveNavTab('cases')}
                 className="font-medium text-blue-600 hover:text-blue-800 hover:underline flex items-center space-x-0.5"
               >
                 <span>View all</span>

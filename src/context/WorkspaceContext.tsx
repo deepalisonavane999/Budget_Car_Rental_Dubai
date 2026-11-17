@@ -64,6 +64,7 @@ interface WorkspaceContextType {
   // Reference Data
   locations: LocationItem[];
   vehicleGroups: VehicleGroupItem[];
+  setVehicleGroups: React.Dispatch<React.SetStateAction<VehicleGroupItem[]>>;
   chargesSettings: ChargeSettingItem[];
   isLoadingCustomer: boolean;
   refreshCustomerData: () => Promise<void>;
@@ -78,6 +79,7 @@ interface WorkspaceContextType {
   fetchInvoiceDetails: (voucherNo: string) => Promise<{ success: boolean; message: string }>;
   fetchStatementOfAccounts: () => Promise<{ success: boolean; message: string }>;
   fetchVehicleAccident: (plateNo: string) => Promise<{ success: boolean; message: string; data?: any }>;
+  searchBookingOrAgreement: (query: string) => Promise<{ success: boolean; message: string; plateNo?: string }>;
 
   // Navigation & Communication State
   activeNavTab: string;
@@ -191,10 +193,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     : 'rentals';
 
   const setActiveNavTab = (tab: string) => {
-    navigate({
-      pathname: `/${tab}`,
-      search: location.search,
-    });
+    navigate(`/${tab}${location.search}`);
   };
 
   const commParam = searchParams.get('comm') as CommMode;
@@ -249,6 +248,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   const urlMobile =
     searchParams.get('mobile') ||
+    searchParams.get('mobileno') ||
     searchParams.get('mobileNo') ||
     searchParams.get('phone') ||
     searchParams.get('caller') ||
@@ -700,9 +700,9 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   };
 
   const fetchVehicleAccident = async (plateNo: string) => {
+    // Only PlateNo as per collection: { "PlateNo": "..." }
     const res = await apiService.getAccident({
-      plateNo,
-      customerId: Number(customer.id) || undefined,
+      plateNo: plateNo.trim(),
     });
     if (res.success && res.result) {
       return { success: true, message: `Incident #${res.result.id} attached`, data: res.result };
@@ -777,17 +777,8 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           isEmail ? trimmed : undefined
         );
 
-        setSearchParams((prev) => {
-          const next = new URLSearchParams(prev);
-          if (isEmail) {
-            next.set('email', trimmed);
-            next.delete('mobile');
-          } else {
-            next.set('mobile', trimmed);
-            next.delete('email');
-          }
-          return next;
-        });
+        const paramKey = isEmail ? 'email' : 'mobile';
+        navigate(`${location.pathname}?${paramKey}=${trimmed}`, { replace: true });
 
         return { success: true, message: `Loaded customer ${displayName}` };
       }
@@ -813,6 +804,8 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       const next = new URLSearchParams(prev);
       next.delete('email');
       next.delete('mobile');
+      next.delete('mobileno');
+      next.delete('mobileNo');
       return next;
     });
   };
@@ -860,6 +853,107 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     return { success: true, message: `Agreement ${activeRental.agreementNo} check-in recorded at ${loc?.name || 'Branch'}` };
   };
 
+  const searchBookingOrAgreement = async (query: string) => {
+    const trimmed = query.trim();
+    if (!trimmed) return { success: false, message: 'Please enter a booking or agreement number' };
+
+    try {
+      // 1. Try Agreement lookup first
+      const agrRes = await apiService.getAgreements({ agreementNo: trimmed });
+      if (agrRes.success && agrRes.result?.items && agrRes.result.items.length > 0) {
+        const item = agrRes.result.items[0];
+        const [startDt, startTm] = (item.startDate || '').split('T');
+        const [endDt, endTm] = (item.endDate || '').split('T');
+
+        const resolvedPlate = (item as any).vehicle?.plateNo || (item as any).plateNo || '32849-EE-DXB';
+        const updatedRental: RentalAgreement = {
+          agreementNo: item.agreementNo,
+          status: item.agreementStatus === 'Open' ? 'Active' : 'Returned',
+          pickupDate: startDt || '—',
+          pickupTime: startTm ? startTm.slice(0, 5) : '00:00',
+          returnDate: endDt || '—',
+          returnTime: endTm ? endTm.slice(0, 5) : '00:00',
+          pickupLocation: item.location || item.pickupLocation || 'Dubai',
+          returnLocation: item.location || item.pickupLocation || 'Dubai',
+          rentalPeriodDays: 30,
+          depositAmount: 1500,
+          depositStatus: 'Held',
+          totalCharges: item.totalCharges ?? 0,
+          vehicle: {
+            model: item.vehicleGroup?.name ? `Group ${item.vehicleGroup.name}` : 'Sedan',
+            group: item.vehicleGroup?.name || 'Group A',
+            category: item.vehicleGroup?.name || 'Standard',
+            image: '/cars/nissan-kicks.png',
+            plateNo: resolvedPlate,
+          },
+        };
+
+        if (item.agreementStatus === 'Open') {
+          setActiveRental(updatedRental);
+        } else {
+          setPreviousRental(updatedRental);
+        }
+
+        if (item.customerId) {
+          setCustomer((prev) => ({
+            ...prev,
+            id: String(item.customerId),
+            name: item.customer?.name || prev.name,
+            mobile: item.customer?.mobileNo || prev.mobile,
+          }));
+        }
+
+        return {
+          success: true,
+          message: `Loaded agreement ${item.agreementNo}`,
+          plateNo: resolvedPlate,
+        };
+      }
+
+      // 2. Try Booking lookup
+      const bookRes = await apiService.getBookings({ bookingNo: trimmed });
+      if (bookRes.success && bookRes.result?.items && bookRes.result.items.length > 0) {
+        const item = bookRes.result.items[0];
+        const [startDt, startTm] = (item.startDate || '').split('T');
+        const [endDt, endTm] = (item.endDate || '').split('T');
+
+        const resolvedPlate = (item as any).vehicle?.plateNo || '32849-EE-DXB';
+        const updatedRental: RentalAgreement = {
+          agreementNo: item.agreementNo || item.bookingNo || trimmed,
+          status: item.bookingStatus === 'Closed' ? 'Returned' : 'Active',
+          pickupDate: startDt || '—',
+          pickupTime: startTm ? startTm.slice(0, 5) : '00:00',
+          returnDate: endDt || '—',
+          returnTime: endTm ? endTm.slice(0, 5) : '00:00',
+          pickupLocation: item.location || 'Dubai',
+          returnLocation: item.location || 'Dubai',
+          rentalPeriodDays: 30,
+          depositAmount: 1500,
+          depositStatus: 'Held',
+          totalCharges: item.totalCharges ?? 0,
+          vehicle: {
+            model: item.vehicleGroup?.name ? `Group ${item.vehicleGroup.name}` : 'Sedan',
+            group: item.vehicleGroup?.name || 'Group A',
+            category: item.vehicleGroup?.name || 'Standard',
+            image: '/cars/nissan-kicks.png',
+            plateNo: resolvedPlate,
+          },
+        };
+
+        setPreviousRental(updatedRental);
+        return {
+          success: true,
+          message: `Loaded booking ${item.bookingNo || item.agreementNo}`,
+          plateNo: resolvedPlate,
+        };
+      }
+
+      return { success: false, message: `No booking or agreement found for "${trimmed}"` };
+    } catch {
+      return { success: false, message: 'Network or lookup error' };
+    }
+  };
+
   return (
     <WorkspaceContext.Provider
       value={{
@@ -878,6 +972,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         roadsideAssistance,
         locations,
         vehicleGroups,
+        setVehicleGroups,
         chargesSettings,
         isLoadingCustomer,
         refreshCustomerData: fetchCustomerData,
@@ -890,6 +985,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         fetchInvoiceDetails,
         fetchStatementOfAccounts,
         fetchVehicleAccident,
+        searchBookingOrAgreement,
         activeNavTab,
         setActiveNavTab,
         commMode,

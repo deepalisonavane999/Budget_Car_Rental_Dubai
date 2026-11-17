@@ -12,6 +12,7 @@ export const RentalsPage: React.FC = () => {
     commMode,
     setIsExtensionOpen,
     setIsReturnOpen,
+    setActiveNavTab,
   } = useWorkspace();
   const navigate = useNavigate();
   const [agreementModalOpen, setAgreementModalOpen] = useState(false);
@@ -121,7 +122,7 @@ export const RentalsPage: React.FC = () => {
 
         {/* 2. Previous Rental Card */}
         <div
-          onClick={() => navigate('/billing')}
+          onClick={() => setActiveNavTab('billing')}
           className="bg-white border border-slate-200 hover:border-blue-300 rounded p-2 shadow-2xs transition-all cursor-pointer group"
         >
           <div className="grid grid-cols-12 gap-2 items-center text-[10px]">

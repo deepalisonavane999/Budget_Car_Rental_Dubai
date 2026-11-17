@@ -8,7 +8,7 @@ interface PhoneCommProps {
 }
 
 export const PhoneCommunication: React.FC<PhoneCommProps> = ({ variant = 'inbound' }) => {
-  const { customer, queueName, ivrPath, caseDetails, previousRental } = useWorkspace();
+  const { customer, queueName, ivrPath, caseDetails, previousRental, setActiveNavTab } = useWorkspace();
   const navigate = useNavigate();
 
   // Agent Notes state
@@ -178,7 +178,7 @@ export const PhoneCommunication: React.FC<PhoneCommProps> = ({ variant = 'inboun
               Pending
             </span>
             <button
-              onClick={() => navigate('/cases')}
+              onClick={() => setActiveNavTab('cases')}
               className="text-blue-600 hover:text-blue-800 hover:underline flex items-center text-[9px] ml-0.5"
             >
               <span>View</span>
