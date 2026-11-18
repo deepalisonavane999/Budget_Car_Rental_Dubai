@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   FileText,
   CreditCard,
@@ -8,17 +8,23 @@ import {
   CheckCircle2,
   Link as LinkIcon,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
   Car,
   Receipt,
   Layers,
   Search,
+  Calendar,
+  ArrowRight,
+  Loader2,
 } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { Badge } from '../components/common/Badge';
 import { CommunicationDock } from '../components/communication/CommunicationDock';
 import { VoucherExplorer } from '../components/billing/VoucherExplorer';
 import { InvoiceExplorer } from '../components/billing/InvoiceExplorer';
-import { BookingFilterExplorer } from '../components/billing/BookingFilterExplorer';
 import { useNavigate } from 'react-router-dom';
 
 export const BillingPage: React.FC = () => {
@@ -30,28 +36,48 @@ export const BillingPage: React.FC = () => {
     fetchStatementOfAccounts,
     setActiveNavTab,
     searchBookingOrAgreement,
+    loadBillingForAgreement,
+    selectedAgreementVouchers,
+    selectedInvoiceLines,
+    isLoadingBillingAgreement,
+    bookingResults,
+    isSearchingBooking,
   } = useWorkspace();
   const navigate = useNavigate();
   const [selectedRentalType, setSelectedRentalType] = useState<'previous' | 'active'>('previous');
-  const [billingView, setBillingView] = useState<'overview' | 'vouchers' | 'invoices' | 'bookings'>('overview');
+  const [billingView, setBillingView] = useState<'overview' | 'vouchers' | 'invoices'>('overview');
+  const [lowerTab, setLowerTab] = useState<'bookings' | 'vouchers' | 'invoice_lines'>('bookings');
   const [actionSuccessMsg, setActionSuccessMsg] = useState<string | null>(null);
-  const [bookingQuery, setBookingQuery] = useState('');
-  const [searchingBooking, setSearchingBooking] = useState(false);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(50);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [bookingResults]);
+
+  const totalPages = Math.ceil(bookingResults.length / pageSize) || 1;
+  const paginatedBookings = bookingResults.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+  const getPageNumbers = () => {
+    if (totalPages <= 7) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+    const pages: (number | string)[] = [];
+    if (currentPage <= 4) {
+      pages.push(1, 2, 3, 4, 5, '...', totalPages);
+    } else if (currentPage >= totalPages - 3) {
+      pages.push(1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
+    } else {
+      pages.push(1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages);
+    }
+    return pages;
+  };
 
   const displayedRental = selectedRentalType === 'active' ? activeRental : previousRental;
 
   const showFeedback = (msg: string) => {
     setActionSuccessMsg(msg);
     setTimeout(() => setActionSuccessMsg(null), 4000);
-  };
-
-  const handleBookingSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!bookingQuery.trim()) return;
-    setSearchingBooking(true);
-    const res = await searchBookingOrAgreement(bookingQuery.trim());
-    setSearchingBooking(false);
-    showFeedback(res.message);
   };
 
   const handleSendInvoice = async () => {
@@ -125,18 +151,6 @@ export const BillingPage: React.FC = () => {
                   <FileText className="w-3 h-3" />
                   <span>Invoices</span>
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setBillingView('bookings')}
-                  className={`flex items-center space-x-1 px-2.5 py-0.5 rounded transition-all ${
-                    billingView === 'bookings'
-                      ? 'bg-blue-600 text-white shadow-2xs font-bold'
-                      : 'hover:text-slate-900'
-                  }`}
-                >
-                  <Search className="w-3 h-3" />
-                  <span>Bookings</span>
-                </button>
               </div>
 
               <div className="relative">
@@ -154,27 +168,6 @@ export const BillingPage: React.FC = () => {
                 </select>
                 <ChevronDown className="w-3 h-3 text-slate-500 absolute right-1.5 top-1.5 pointer-events-none" />
               </div>
-
-              {/* Search Booking or Agreement */}
-              <form onSubmit={handleBookingSearch} className="flex items-center space-x-1">
-                <div className="relative">
-                  <Search className="w-3 h-3 text-slate-400 absolute left-2 top-1.5 pointer-events-none" />
-                  <input
-                    type="text"
-                    value={bookingQuery}
-                    onChange={(e) => setBookingQuery(e.target.value)}
-                    placeholder="Booking / Agreement #..."
-                    className="pl-6 pr-2 py-0.5 bg-slate-50 border border-slate-300 rounded text-[10px] focus:ring-1 focus:ring-blue-500 font-mono w-40"
-                  />
-                </div>
-                <button
-                  type="submit"
-                  disabled={searchingBooking}
-                  className="px-2 py-0.5 bg-blue-600 hover:bg-blue-700 text-white rounded font-semibold text-[10px] transition-colors disabled:opacity-50"
-                >
-                  {searchingBooking ? '...' : 'Lookup'}
-                </button>
-              </form>
             </div>
           </div>
 
@@ -250,13 +243,6 @@ export const BillingPage: React.FC = () => {
           <VoucherExplorer />
         ) : billingView === 'invoices' ? (
           <InvoiceExplorer />
-        ) : billingView === 'bookings' ? (
-          <BookingFilterExplorer
-            onSelectBooking={() => {
-              setBillingView('overview');
-              showFeedback('Selected booking loaded into Billing Overview');
-            }}
-          />
         ) : (
           <>
             {/* 2. Three Column Financial Summary, Breakdown, Fines */}
@@ -374,15 +360,17 @@ export const BillingPage: React.FC = () => {
                 <span>Send Statement</span>
               </button>
               <button
-                onClick={() => setBillingView('invoices')}
-                className="px-2 py-0.5 bg-blue-50 border border-blue-200 hover:bg-blue-100 text-blue-700 rounded font-semibold flex items-center space-x-1"
+                type="button"
+                onClick={() => setLowerTab('invoice_lines')}
+                className="px-2 py-0.5 bg-blue-50 border border-blue-200 hover:bg-blue-100 text-blue-700 rounded font-semibold flex items-center space-x-1 cursor-pointer"
               >
                 <FileText className="w-2.5 h-2.5 text-blue-600" />
                 <span>View Invoice</span>
               </button>
               <button
-                onClick={() => setBillingView('vouchers')}
-                className="px-2 py-0.5 bg-blue-50 border border-blue-200 hover:bg-blue-100 text-blue-700 rounded font-semibold flex items-center space-x-1"
+                type="button"
+                onClick={() => setLowerTab('vouchers')}
+                className="px-2 py-0.5 bg-blue-50 border border-blue-200 hover:bg-blue-100 text-blue-700 rounded font-semibold flex items-center space-x-1 cursor-pointer"
               >
                 <Receipt className="w-2.5 h-2.5 text-blue-600" />
                 <span>Explore Vouchers</span>
@@ -413,6 +401,499 @@ export const BillingPage: React.FC = () => {
                 <span className="text-emerald-700 font-bold ml-2 animate-fade-in">{actionSuccessMsg}</span>
               )}
             </div>
+
+            {/* 4. Single Clean Tabbed Container for Connected Billing Flow */}
+            {isSearchingBooking || isLoadingBillingAgreement ? (
+              <div className="bg-white border border-slate-200 rounded p-6 text-center text-slate-400 space-y-2">
+                <Loader2 className="w-5 h-5 animate-spin mx-auto text-blue-600" />
+                <span className="text-xs font-medium block">
+                  {isSearchingBooking ? 'Querying GetBookingByDifferentFilters...' : 'Loading live agreement vouchers & invoice lines...'}
+                </span>
+              </div>
+            ) : (
+              <div className="bg-white border border-slate-200 rounded p-2.5 shadow-2xs space-y-2 select-none animate-fade-in">
+                {/* Clean Tab Selector Bar */}
+                <div className="flex flex-wrap items-center justify-between pb-1.5 border-b border-slate-100 gap-2">
+                  <div className="flex items-center space-x-1.5 bg-slate-100 p-0.5 rounded text-[11px] font-semibold">
+                    <button
+                      type="button"
+                      onClick={() => setLowerTab('bookings')}
+                      className={`flex items-center space-x-1 px-3 py-1 rounded transition-all cursor-pointer ${
+                        lowerTab === 'bookings'
+                          ? 'bg-white text-blue-600 shadow-2xs font-bold'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      <Calendar className="w-3.5 h-3.5" />
+                      <span>All Bookings & Agreements</span>
+                      <span className="text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.2 rounded-full font-mono">
+                        {bookingResults.length}
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setLowerTab('vouchers')}
+                      className={`flex items-center space-x-1.5 px-3 py-1 rounded transition-all cursor-pointer ${
+                        lowerTab === 'vouchers'
+                          ? 'bg-white text-blue-600 shadow-2xs font-bold'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      <Receipt className="w-3.5 h-3.5" />
+                      <span>Vouchers ({billingSummary.agreementNo || displayedRental.agreementNo})</span>
+                      <span className="text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.2 rounded-full font-mono">
+                        {selectedAgreementVouchers.length}
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setLowerTab('invoice_lines')}
+                      className={`flex items-center space-x-1 px-3 py-1 rounded transition-all cursor-pointer ${
+                        lowerTab === 'invoice_lines'
+                          ? 'bg-white text-blue-600 shadow-2xs font-bold'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      <FileText className="w-3.5 h-3.5" />
+                      <span>Invoice Lines ({billingSummary.invoiceNo || 'INV-387951'})</span>
+                      <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded-full font-mono">
+                        {selectedInvoiceLines.length}
+                      </span>
+                    </button>
+                  </div>
+
+                  {lowerTab === 'bookings' && (
+                    <div className="flex items-center space-x-1.5 text-[10px] text-slate-600">
+                      <span className="font-medium">Rows per page:</span>
+                      <select
+                        value={pageSize}
+                        onChange={(e) => {
+                          setPageSize(Number(e.target.value));
+                          setCurrentPage(1);
+                        }}
+                        className="bg-slate-50 border border-slate-300 rounded px-1.5 py-0.5 text-[10px] font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+                      >
+                        <option value={10}>10</option>
+                        <option value={25}>25</option>
+                        <option value={50}>50</option>
+                        <option value={100}>100</option>
+                      </select>
+                    </div>
+                  )}
+                </div>
+
+                {/* Tab 1: Bookings & Agreements */}
+                {lowerTab === 'bookings' && (
+                  <div className="border border-slate-200 rounded overflow-hidden">
+                    <div className="overflow-x-auto max-h-[520px] overflow-y-auto">
+                      <table className="w-full text-left text-[11px]">
+                        <thead className="bg-slate-50 text-[10px] text-slate-500 font-semibold border-b border-slate-200 uppercase tracking-wider sticky top-0 z-10 shadow-2xs">
+                          <tr>
+                            <th className="py-1.5 px-3 bg-slate-50">Booking / Agreement #</th>
+                            <th className="py-1.5 px-3 bg-slate-50">Status</th>
+                            <th className="py-1.5 px-3 bg-slate-50">Assigned Plate</th>
+                            <th className="py-1.5 px-3 bg-slate-50">Rental Dates</th>
+                            <th className="py-1.5 px-3 bg-slate-50">Total Charges</th>
+                            <th className="py-1.5 px-3 bg-slate-50 text-right">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {paginatedBookings.length > 0 ? (
+                            paginatedBookings.map((b) => {
+                              const bNo = b.bookingNo || b.agreementNo || `BKG-${b.id}`;
+                              const plate = (b as any).vehicle?.plateNo || (b as any).plateNo || '32849-EE-DXB';
+                              const isClosed = b.bookingStatus === 'Closed';
+
+                              return (
+                                <tr key={b.id || bNo} className="hover:bg-blue-50/40 transition-colors">
+                                  <td className="py-2 px-3">
+                                    <span className="font-mono font-bold text-slate-900 text-xs block">{bNo}</span>
+                                    <span className="text-[9px] text-slate-400">
+                                      {b.vehicleGroup?.name ? `Group ${b.vehicleGroup.name}` : 'Rental Vehicle'}
+                                    </span>
+                                  </td>
+                                  <td className="py-2 px-3">
+                                    <Badge variant={isClosed ? 'gray' : 'green'} className="text-[9px] py-0 px-1.5">
+                                      {b.bookingStatus || 'Active'}
+                                    </Badge>
+                                  </td>
+                                  <td className="py-2 px-3">
+                                    <span className="font-mono font-bold text-slate-800 text-[10px] px-1.5 py-0.5 bg-slate-100 rounded border border-slate-200">
+                                      {plate}
+                                    </span>
+                                  </td>
+                                  <td className="py-2 px-3 text-slate-600 text-[10px]">
+                                    <span>{b.startDate?.split('T')[0] || '—'} → {b.endDate?.split('T')[0] || '—'}</span>
+                                    {b.location && (
+                                      <span className="text-slate-400 block text-[9px]">{b.location}</span>
+                                    )}
+                                  </td>
+                                  <td className="py-2 px-3 font-mono font-bold text-slate-900">
+                                    AED {Number(b.totalCharges || 0).toLocaleString()}
+                                  </td>
+                                  <td className="py-2 px-3 text-right">
+                                    <div className="flex items-center justify-end space-x-1.5">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const params = new URLSearchParams(window.location.search);
+                                          params.set('op', 'accidents');
+                                          params.set('plate', plate);
+                                          navigate(`/operations?${params.toString()}`);
+                                        }}
+                                        className="px-2 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded text-[9px] font-semibold flex items-center space-x-0.5 transition-colors cursor-pointer"
+                                        title="Check Accident & Police Reports for this plate"
+                                      >
+                                        <AlertTriangle className="w-2.5 h-2.5 text-amber-600" />
+                                        <span>Accidents</span>
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={async () => {
+                                          const res = await loadBillingForAgreement(bNo, (b as any).customerId);
+                                          showFeedback(res.message);
+                                          setLowerTab('vouchers');
+                                        }}
+                                        className="px-2.5 py-0.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-[10px] font-semibold flex items-center space-x-1 transition-colors cursor-pointer"
+                                      >
+                                        <span>Load for Billing</span>
+                                        <ArrowRight className="w-2.5 h-2.5" />
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          ) : (
+                            <tr>
+                              <td colSpan={6} className="py-8 text-center text-slate-400 text-xs">
+                                No bookings found for this customer.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Pagination Controls */}
+                    {bookingResults.length > 0 && (
+                      <div className="flex items-center justify-between px-3 py-2 bg-slate-50 border-t border-slate-200 text-[10px]">
+                        <div className="flex items-center space-x-3 text-slate-500">
+                          <span>
+                            Showing{' '}
+                            <span className="font-semibold text-slate-800">
+                              {(currentPage - 1) * pageSize + 1}
+                            </span>{' '}
+                            to{' '}
+                            <span className="font-semibold text-slate-800">
+                              {Math.min(currentPage * pageSize, bookingResults.length)}
+                            </span>{' '}
+                            of{' '}
+                            <span className="font-semibold text-slate-800">
+                              {bookingResults.length}
+                            </span>{' '}
+                            bookings
+                          </span>
+                          <span className="text-slate-300">|</span>
+                          <span>
+                            Page <span className="font-semibold text-slate-800">{currentPage}</span> of{' '}
+                            <span className="font-semibold text-slate-800">{totalPages}</span>
+                          </span>
+                        </div>
+
+                        <div className="flex items-center space-x-1">
+                          <button
+                            type="button"
+                            onClick={() => setCurrentPage(1)}
+                            disabled={currentPage === 1}
+                            className="px-1.5 py-0.5 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-white border border-slate-300 rounded text-slate-700 flex items-center transition-colors cursor-pointer disabled:cursor-not-allowed"
+                            title="First Page"
+                          >
+                            <ChevronsLeft className="w-3 h-3" />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+                            disabled={currentPage === 1}
+                            className="px-2 py-0.5 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-white border border-slate-300 rounded text-slate-700 flex items-center space-x-0.5 transition-colors cursor-pointer disabled:cursor-not-allowed"
+                          >
+                            <ChevronLeft className="w-3 h-3" />
+                            <span>Prev</span>
+                          </button>
+
+                          <div className="flex items-center space-x-1 px-1">
+                            {getPageNumbers().map((item, idx) => {
+                              if (item === '...') {
+                                return (
+                                  <span key={`ellipsis-${idx}`} className="px-1 text-slate-400 select-none">
+                                    ...
+                                  </span>
+                                );
+                              }
+                              const pageNum = Number(item);
+                              return (
+                                <button
+                                  key={pageNum}
+                                  type="button"
+                                  onClick={() => setCurrentPage(pageNum)}
+                                  className={`w-5 h-5 rounded text-[10px] font-semibold transition-colors cursor-pointer ${
+                                    currentPage === pageNum
+                                      ? 'bg-blue-600 text-white shadow-2xs'
+                                      : 'bg-white hover:bg-slate-100 text-slate-600 border border-slate-200'
+                                  }`}
+                                >
+                                  {pageNum}
+                                </button>
+                              );
+                            })}
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
+                            disabled={currentPage === totalPages}
+                            className="px-2 py-0.5 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-white border border-slate-300 rounded text-slate-700 flex items-center space-x-0.5 transition-colors cursor-pointer disabled:cursor-not-allowed"
+                          >
+                            <span>Next</span>
+                            <ChevronRight className="w-3 h-3" />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setCurrentPage(totalPages)}
+                            disabled={currentPage === totalPages}
+                            className="px-1.5 py-0.5 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-white border border-slate-300 rounded text-slate-700 flex items-center transition-colors cursor-pointer disabled:cursor-not-allowed"
+                            title="Last Page"
+                          >
+                            <ChevronsRight className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Tab 2: Vouchers for Selected Agreement */}
+                {lowerTab === 'vouchers' && (
+                  <div className="space-y-1.5 animate-fade-in">
+                    <div className="flex items-center justify-between text-[11px] px-1 py-0.5 text-slate-500">
+                      <div className="flex items-center space-x-2">
+                        <button
+                          type="button"
+                          onClick={() => setLowerTab('bookings')}
+                          className="text-blue-600 hover:text-blue-800 font-semibold flex items-center space-x-0.5 transition-colors cursor-pointer"
+                        >
+                          <ChevronLeft className="w-3.5 h-3.5" />
+                          <span>All Bookings</span>
+                        </button>
+                        <span className="text-slate-300">/</span>
+                        <span className="text-slate-800 font-medium">
+                          Vouchers for <span className="font-mono font-semibold text-slate-900">{billingSummary.agreementNo || displayedRental.agreementNo}</span>
+                        </span>
+                      </div>
+                      <span className="text-[10px] text-slate-400">
+                        {selectedAgreementVouchers.length} voucher{selectedAgreementVouchers.length === 1 ? '' : 's'} linked
+                      </span>
+                    </div>
+
+                    <div className="border border-slate-200 rounded overflow-hidden">
+                      <div className="overflow-x-auto max-h-[520px] overflow-y-auto">
+                        <table className="w-full text-left text-[11px]">
+                          <thead className="bg-slate-50 text-[10px] text-slate-500 font-semibold border-b border-slate-200 uppercase tracking-wider sticky top-0 z-10 shadow-2xs">
+                            <tr>
+                              <th className="py-1.5 px-3 bg-slate-50">Voucher #</th>
+                              <th className="py-1.5 px-3 bg-slate-50">Type</th>
+                              <th className="py-1.5 px-3 bg-slate-50">Date</th>
+                              <th className="py-1.5 px-3 bg-slate-50">Amount</th>
+                              <th className="py-1.5 px-3 bg-slate-50">Allocated</th>
+                              <th className="py-1.5 px-3 bg-slate-50">Status</th>
+                              <th className="py-1.5 px-3 bg-slate-50 text-right">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {selectedAgreementVouchers.length > 0 ? (
+                              selectedAgreementVouchers.map((v) => {
+                                const type = (v.voucherTypesName || v.voucherSubTypeName || '').toLowerCase();
+                                const isInvoice = type.includes('invoice') || v.type === 1;
+
+                                return (
+                                  <tr key={v.id || v.voucherNo} className="hover:bg-blue-50/40 transition-colors">
+                                    <td className="py-2 px-3">
+                                      <span className="font-mono font-bold text-slate-900 text-xs block">{v.voucherNo}</span>
+                                      <span className="text-[9px] text-slate-400">ID: {v.id}</span>
+                                    </td>
+                                    <td className="py-2 px-3">
+                                      <Badge
+                                        variant={
+                                          isInvoice
+                                            ? 'blue'
+                                            : type.includes('credit')
+                                            ? 'purple'
+                                            : type.includes('refund')
+                                            ? 'green'
+                                            : 'amber'
+                                        }
+                                        className="text-[9px] py-0 px-1.5"
+                                      >
+                                        {v.voucherTypesName || 'Voucher'}
+                                      </Badge>
+                                    </td>
+                                    <td className="py-2 px-3 text-slate-600 text-[10px]">
+                                      {v.date?.split('T')[0] || '—'}
+                                    </td>
+                                    <td className="py-2 px-3 font-mono font-bold text-slate-900">
+                                      AED {Number(v.amount || 0).toLocaleString()}
+                                    </td>
+                                    <td className="py-2 px-3 font-mono text-slate-700">
+                                      AED {Number(v.allocatedAmount ?? v.amount ?? 0).toLocaleString()}
+                                    </td>
+                                    <td className="py-2 px-3">
+                                      <Badge variant={v.isClosed ? 'gray' : 'green'} className="text-[9px] py-0 px-1.5">
+                                        {v.statusText || (v.isClosed ? 'Closed' : 'Open')}
+                                      </Badge>
+                                    </td>
+                                    <td className="py-2 px-3 text-right">
+                                      <div className="flex items-center justify-end space-x-1.5">
+                                        {v.url && (
+                                          <a
+                                            href={v.url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded text-[9px] font-semibold flex items-center space-x-0.5 transition-colors cursor-pointer"
+                                          >
+                                            <span>Report</span>
+                                            <ExternalLink className="w-2.5 h-2.5" />
+                                          </a>
+                                        )}
+                                        {isInvoice && (
+                                          <button
+                                            type="button"
+                                            onClick={() => setLowerTab('invoice_lines')}
+                                            className="px-2 py-0.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-[10px] font-semibold flex items-center space-x-1 transition-colors cursor-pointer"
+                                          >
+                                            <span>Inspect Lines</span>
+                                            <ArrowRight className="w-2.5 h-2.5" />
+                                          </button>
+                                        )}
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              })
+                            ) : (
+                              <tr>
+                                <td colSpan={7} className="py-8 text-center text-slate-400 text-xs">
+                                  No vouchers recorded for agreement {billingSummary.agreementNo || displayedRental.agreementNo}. Click "Load for Billing" on any agreement above.
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Tab 3: Invoice Lines Breakdown */}
+                {lowerTab === 'invoice_lines' && (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-[11px] px-1 pb-1">
+                      <div className="flex items-center space-x-2">
+                        <button
+                          type="button"
+                          onClick={() => setLowerTab('vouchers')}
+                          className="text-blue-600 hover:text-blue-800 font-semibold flex items-center space-x-0.5 transition-colors cursor-pointer"
+                        >
+                          <ChevronLeft className="w-3.5 h-3.5" />
+                          <span>Back to Vouchers</span>
+                        </button>
+                        <span className="text-slate-300">|</span>
+                        <span className="text-slate-600">
+                          Invoice Line Items: <span className="font-mono font-bold text-slate-900">{billingSummary.invoiceNo || 'INV-387951'}</span>
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="border border-slate-200 rounded overflow-hidden">
+                      <div className="overflow-x-auto max-h-[520px] overflow-y-auto">
+                        <table className="w-full text-left text-[11px]">
+                          <thead className="bg-slate-50 text-[10px] text-slate-500 font-semibold border-b border-slate-200 uppercase tracking-wider sticky top-0 z-10 shadow-2xs">
+                            <tr>
+                              <th className="py-1.5 px-3 bg-slate-50">Line #</th>
+                              <th className="py-1.5 px-3 bg-slate-50">Charge Type</th>
+                              <th className="py-1.5 px-3 bg-slate-50">Description</th>
+                              <th className="py-1.5 px-3 bg-slate-50">Assigned Plate</th>
+                              <th className="py-1.5 px-3 bg-slate-50">Qty</th>
+                              <th className="py-1.5 px-3 bg-slate-50">Credit / Rate</th>
+                              <th className="py-1.5 px-3 bg-slate-50">Tax (5%)</th>
+                              <th className="py-1.5 px-3 bg-slate-50 text-right">Line Total</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {selectedInvoiceLines.length > 0 ? (
+                              selectedInvoiceLines.map((line, idx) => {
+                                const total = Number((line.credit || 0) + (line.tax || 0)).toFixed(2);
+                                return (
+                                  <tr key={line.id || idx} className="hover:bg-blue-50/40 transition-colors">
+                                    <td className="py-2 px-3 font-mono text-slate-500">{line.srNo || idx + 1}</td>
+                                    <td className="py-2 px-3 font-medium text-slate-800">
+                                      {line.chargesType?.name || 'Rental Fee'}
+                                    </td>
+                                    <td className="py-2 px-3 text-slate-600">{line.description || 'Basic Rental'}</td>
+                                    <td className="py-2 px-3">
+                                      <span className="font-mono text-[10px] px-1.5 py-0.5 bg-slate-100 rounded border border-slate-200 text-slate-800">
+                                        {line.vehicle?.plateNo || displayedRental.vehicle.plateNo}
+                                      </span>
+                                    </td>
+                                    <td className="py-2 px-3 font-mono">{line.quantity || 1}</td>
+                                    <td className="py-2 px-3 font-mono">
+                                      AED {Number(line.credit || line.debit || 0).toLocaleString()}
+                                    </td>
+                                    <td className="py-2 px-3 font-mono text-slate-600">
+                                      AED {Number(line.tax || 0).toFixed(2)}
+                                    </td>
+                                    <td className="py-2 px-3 font-mono font-bold text-slate-900 text-right">
+                                      AED {total}
+                                    </td>
+                                  </tr>
+                                );
+                              })
+                            ) : (
+                              <tr>
+                                <td colSpan={8} className="py-8 text-center text-slate-400 text-xs">
+                                  {billingSummary.chargeBreakdown.length > 0
+                                    ? 'Detailed itemized invoice lines loaded into overview cards above.'
+                                    : 'No line items available for this invoice.'}
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* Summary Footer for Invoice Lines */}
+                      <div className="flex items-center justify-between px-3 py-2 bg-slate-50 border-t border-slate-200 text-[10px]">
+                        <span className="text-slate-500">
+                          Invoice: <span className="font-mono font-bold text-slate-800">{billingSummary.invoiceNo}</span>
+                          {billingSummary.isPaid ? ' (Paid)' : ' (Due)'}
+                        </span>
+                        <div className="flex items-center space-x-4">
+                          <span className="text-slate-600">
+                            VAT (5%): <span className="font-mono font-bold text-slate-900">AED {billingSummary.vatAmount}</span>
+                          </span>
+                          <span className="text-slate-600">
+                            Total (Incl. VAT): <span className="font-mono font-bold text-blue-600 text-xs">AED {billingSummary.totalInclVat}</span>
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </>
         )}
       </div>

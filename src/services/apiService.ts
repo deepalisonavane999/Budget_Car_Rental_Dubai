@@ -122,6 +122,32 @@ export interface VoucherItem {
   notes?: string | null;
 }
 
+export interface InvoiceLineItem {
+  id: number;
+  voucherId?: number;
+  srNo?: number;
+  description?: string;
+  chargesTypeId?: number;
+  chargesType?: {
+    id: number;
+    name: string;
+    detail?: string | null;
+    code?: string | null;
+  } | null;
+  vehicleId?: number;
+  vehicle?: {
+    plateNo?: string;
+    make?: string;
+    id?: number;
+  } | null;
+  quantity?: number;
+  credit?: number;
+  debit?: number;
+  tax?: number;
+  taxable?: boolean;
+  price?: number;
+}
+
 export interface InvoiceResult {
   id: number;
   voucherNo: string;
@@ -132,6 +158,7 @@ export interface InvoiceResult {
   notes?: string;
   agreementId?: number;
   contactId?: number;
+  voucherLines?: InvoiceLineItem[];
 }
 
 export interface DepositItem {
@@ -145,6 +172,10 @@ export interface DepositItem {
   date: string;
   isClosed?: boolean;
   notes?: string | null;
+  status?: number;
+  statusName?: string;
+  statusText?: string;
+  voucherTypesName?: string;
 }
 
 export interface TrafficFineItem {
@@ -395,7 +426,9 @@ export class BudgetApiService {
     status?: number;
   }): Promise<ApiResponse<{ totalCount: number; items: VoucherItem[] }>> {
     const payload: Record<string, any> = {};
-    if (params.customerId !== undefined) payload.CustomerId = params.customerId;
+    if (params.customerId !== undefined && !isNaN(params.customerId) && params.customerId > 0) {
+      payload.CustomerId = params.customerId;
+    }
     if (params.agreementNo) payload.AgreementNo = params.agreementNo;
     if (params.fromDate) payload.FromDate = params.fromDate;
     if (params.toDate) payload.ToDate = params.toDate;
@@ -414,7 +447,9 @@ export class BudgetApiService {
     agreementNo?: string;
   }): Promise<ApiResponse<{ totalCount: number; items: DepositItem[] }>> {
     const payload: Record<string, any> = {};
-    if (params.customerId !== undefined) payload.CustomerId = params.customerId;
+    if (params.customerId !== undefined && !isNaN(params.customerId) && params.customerId > 0) {
+      payload.CustomerId = params.customerId;
+    }
     if (params.agreementNo) payload.AgreementNo = params.agreementNo;
     return this.request<{ totalCount: number; items: DepositItem[] }>('GetDeposit', payload);
   }
@@ -428,7 +463,9 @@ export class BudgetApiService {
   }): Promise<ApiResponse<{ totalCount: number; items: TrafficFineItem[] }>> {
     const payload: Record<string, any> = {};
     if (params.fineNo) payload.FineNo = params.fineNo;
-    if (params.customerId !== undefined) payload.CustomerId = params.customerId;
+    if (params.customerId !== undefined && !isNaN(params.customerId) && params.customerId > 0) {
+      payload.CustomerId = params.customerId;
+    }
     if (params.agreementNo) payload.AgreementNo = params.agreementNo;
     if (params.fromDate) payload.FromDate = params.fromDate;
     if (params.toDate) payload.ToDate = params.toDate;
@@ -518,9 +555,19 @@ export class BudgetApiService {
   }): Promise<ApiResponse<AccidentResult>> {
     const payload: Record<string, any> = {};
     if (params.plateNo) payload.PlateNo = params.plateNo;
-    if (params.customerId !== undefined) payload.CustomerId = params.customerId;
+    if (params.customerId !== undefined && !isNaN(params.customerId) && params.customerId > 0) {
+      payload.CustomerId = params.customerId;
+    }
     if (params.policeReportNo) payload.PoliceReportNo = params.policeReportNo;
-    return this.request<AccidentResult>('GetAccident', payload);
+    const res = await this.request<AccidentResult>('GetAccident', payload);
+    if (!res.success && res.error && (res.error.includes('Data is Null') || res.error.includes('Null values'))) {
+      return {
+        success: false,
+        error: `No accident or police report on file for vehicle ${params.plateNo || ''} (Clean vehicle record).`,
+        result: null,
+      };
+    }
+    return res;
   }
 
   public async createBooking(payload: BookingTransactionPayload): Promise<ApiResponse<any>> {

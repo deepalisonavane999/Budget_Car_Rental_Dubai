@@ -1,12 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { MoreHorizontal, ChevronRight, FileText, Car, CalendarPlus, CheckCircle2 } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { Badge } from '../components/common/Badge';
 import { CommunicationDock } from '../components/communication/CommunicationDock';
+import { apiService } from '../services/apiService';
 import { useNavigate } from 'react-router-dom';
 
 export const RentalsPage: React.FC = () => {
   const {
+    customer,
     activeRental,
     previousRental,
     commMode,
@@ -16,6 +18,38 @@ export const RentalsPage: React.FC = () => {
   } = useWorkspace();
   const navigate = useNavigate();
   const [agreementModalOpen, setAgreementModalOpen] = useState(false);
+
+  // Live Deposit Information from GetDeposit API
+  const [depositAmount, setDepositAmount] = useState<number>(previousRental.depositAmount || 1000);
+  const [depositStatus, setDepositStatus] = useState<string>('Refunded (Processing)');
+
+  useEffect(() => {
+    const fetchDeposit = async () => {
+      const cleanId =
+        customer.id && customer.id !== '—'
+          ? parseInt(String(customer.id).replace(/\D/g, ''), 10)
+          : undefined;
+
+      if (cleanId && cleanId > 0) {
+        try {
+          const res = await apiService.getDeposit({ customerId: cleanId });
+          if (res.success && res.result?.items && res.result.items.length > 0) {
+            const first = res.result.items[0];
+            if (first.amount) setDepositAmount(first.amount);
+            if (first.statusName === 'Settled' || first.amountRefunded > 0) {
+              setDepositStatus('Refunded (Processing)');
+            } else if (first.statusText) {
+              setDepositStatus(first.statusText);
+            }
+          }
+        } catch {
+          // ignore
+        }
+      }
+    };
+
+    fetchDeposit();
+  }, [customer.id]);
 
   return (
     <div className="flex-1 flex flex-col justify-start overflow-hidden p-2 space-y-2 animate-fade-in select-none">
@@ -121,43 +155,86 @@ export const RentalsPage: React.FC = () => {
         </div>
 
         {/* 2. Previous Rental Card */}
-        <div
-          onClick={() => setActiveNavTab('billing')}
-          className="bg-white border border-slate-200 hover:border-blue-300 rounded p-2 shadow-2xs transition-all cursor-pointer group"
-        >
-          <div className="grid grid-cols-12 gap-2 items-center text-[10px]">
-            <div className="col-span-3 flex items-center space-x-2">
-              <span className="font-bold text-slate-900 text-xs">
+        <div className="bg-white border border-slate-200 rounded p-2.5 shadow-2xs">
+          {/* Card Header */}
+          <div className="flex items-center justify-between pb-1.5 border-b border-slate-100">
+            <div className="flex items-center space-x-2">
+              <h2 className="text-xs font-bold text-slate-900 tracking-tight">
                 Previous Rental — {previousRental.agreementNo}
+              </h2>
+              <Badge variant="gray" className="text-[10px] py-0 px-1.5">
+                Returned
+              </Badge>
+            </div>
+          </div>
+
+          {/* Card Content Grid */}
+          <div className="grid grid-cols-12 gap-2 items-center pt-1.5 text-[11px]">
+            {/* Vehicle icon / thumbnail & name */}
+            <div className="col-span-3 flex items-center space-x-2.5">
+              <div className="w-11 h-9 bg-slate-50 border border-slate-200 rounded flex items-center justify-center p-0.5 shrink-0 overflow-hidden">
+                <Car className="w-5 h-5 text-slate-500" />
+              </div>
+              <div className="leading-tight">
+                <h3 className="font-bold text-slate-900 text-xs">
+                  {previousRental.vehicle.model || 'Nissan Sunny'}
+                </h3>
+                <p className="text-slate-500 text-[10px]">
+                  {previousRental.vehicle.category || 'Economy • Nissan Sunny or similar'}
+                </p>
+              </div>
+            </div>
+
+            {/* Pickup Info */}
+            <div className="col-span-2 leading-tight border-l border-slate-100 pl-2">
+              <span className="text-[9px] text-slate-400 block">Pick-up Date</span>
+              <div className="font-bold text-slate-800 text-[10px]">
+                {previousRental.pickupDate} {previousRental.pickupTime}
+              </div>
+              <div className="text-slate-500 text-[9px] truncate">
+                {previousRental.pickupLocation || 'Dubai Airport (DXB) Terminal 1'}
+              </div>
+            </div>
+
+            {/* Return Info */}
+            <div className="col-span-2 leading-tight border-l border-slate-100 pl-2">
+              <span className="text-[9px] text-slate-400 block">Return Date</span>
+              <div className="font-bold text-slate-800 text-[10px]">
+                {previousRental.returnDate} {previousRental.returnTime}
+              </div>
+              <div className="text-slate-500 text-[9px] truncate">
+                {previousRental.returnLocation || 'Dubai Airport (DXB) Terminal 1'}
+              </div>
+            </div>
+
+            {/* Rental Period */}
+            <div className="col-span-2 leading-tight border-l border-slate-100 pl-2">
+              <span className="text-[9px] text-slate-400 block">Rental Period</span>
+              <span className="font-bold text-slate-900 text-[11px]">
+                {previousRental.rentalPeriodDays} days
               </span>
-              <Badge variant="gray" className="text-[9px] py-0 px-1">
+            </div>
+
+            {/* Status */}
+            <div className="col-span-1 leading-tight border-l border-slate-100 pl-2">
+              <span className="text-[9px] text-slate-400 block">Status</span>
+              <Badge variant="gray" className="text-[9px] py-0 px-1 w-max mt-0.5">
                 Returned
               </Badge>
             </div>
 
-            <div className="col-span-2 border-l border-slate-100 pl-2">
-              <span className="text-slate-400 block text-[9px]">Vehicle</span>
-              <span className="font-semibold text-slate-800">{previousRental.vehicle.model}</span>
-            </div>
-
-            <div className="col-span-2 border-l border-slate-100 pl-2">
-              <span className="text-slate-400 block text-[9px]">Pickup</span>
-              <span className="font-medium text-slate-700">{previousRental.pickupDate}</span>
-            </div>
-
-            <div className="col-span-2 border-l border-slate-100 pl-2">
-              <span className="text-slate-400 block text-[9px]">Returned</span>
-              <span className="font-medium text-slate-700">{previousRental.returnDate}</span>
-            </div>
-
-            <div className="col-span-2 border-l border-slate-100 pl-2">
-              <span className="text-slate-400 block text-[9px]">Deposit</span>
-              <span className="font-bold text-slate-900">AED {previousRental.depositAmount}</span>
-              <span className="text-[9px] text-amber-700 ml-1">({previousRental.depositStatus})</span>
-            </div>
-
-            <div className="col-span-1 flex justify-end text-blue-600 group-hover:translate-x-0.5 transition-transform">
-              <ChevronRight className="w-3.5 h-3.5" />
+            {/* Deposit Section */}
+            <div className="col-span-2 leading-tight border-l border-slate-100 pl-2 flex items-center justify-between">
+              <div>
+                <span className="text-[9px] text-slate-400 block">Deposit</span>
+                <span className="font-bold text-slate-900 text-[11px]">
+                  AED {depositAmount.toLocaleString()}
+                </span>
+                <span className="text-[9px] text-amber-700 block">
+                  {depositStatus}
+                </span>
+              </div>
+              <ChevronRight className="w-3.5 h-3.5 text-blue-600 shrink-0" />
             </div>
           </div>
         </div>
