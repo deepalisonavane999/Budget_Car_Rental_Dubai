@@ -195,17 +195,33 @@ export interface TrafficFineItem {
 }
 
 export interface VehicleItem {
+  id?: number;
   fleetCode: number;
   plateNo: string;
   modelId: number;
   modelYear: string;
   statusId: string;
+  status?: string;
   kMs: number;
   tariffGroupId?: number;
-  locationId?: number;
   tariffGroupTitle?: string;
-  vehicleGroupName?: string;
+  locationId?: number;
+  locationName?: string;
   vehicleGroupId?: number;
+  vehicleGroupName?: string;
+  chassisNo?: string;
+  make?: string;
+  model?: string;
+  variant?: string;
+  exteriorColor?: string;
+  fuelLevel?: number;
+  isBooked?: boolean;
+  registrationDate?: string;
+  nextRegistrationDate?: string;
+  insuranceDate?: string;
+  nextInsuranceDate?: string;
+  insurancePolicyNo?: string;
+  eTag?: string;
 }
 
 export interface AccidentResult {
@@ -476,10 +492,13 @@ export class BudgetApiService {
     vehicleGroupId?: number;
     pageNumber?: number;
   } = {}): Promise<ApiResponse<{ totalCount: number; items: VehicleItem[] }>> {
-    return this.request<{ totalCount: number; items: VehicleItem[] }>('GetVehicles', {
-      VehicleGroupId: params.vehicleGroupId ?? 31,
+    const payload: Record<string, any> = {
       PageNumber: params.pageNumber ?? 1,
-    });
+    };
+    if (params.vehicleGroupId !== undefined && params.vehicleGroupId > 0) {
+      payload.VehicleGroupId = params.vehicleGroupId;
+    }
+    return this.request<{ totalCount: number; items: VehicleItem[] }>('GetVehicles', payload);
   }
 
   public async getStatementOfAccounts(params: {

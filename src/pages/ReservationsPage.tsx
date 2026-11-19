@@ -162,7 +162,14 @@ export const ReservationsPage: React.FC = () => {
                   <Car className="w-4 h-4" />
                 </div>
                 <div className="leading-tight">
-                  <h3 className="font-bold text-slate-900 text-xs">{reservationQuote.vehicle.model}</h3>
+                  <div className="flex items-center space-x-1.5">
+                    <h3 className="font-bold text-slate-900 text-xs">{reservationQuote.vehicle.model}</h3>
+                    {reservationQuote.vehicle.plateNo && (
+                      <span className="font-mono font-bold text-blue-700 bg-blue-50 px-1 py-0.2 rounded border border-blue-200 text-[9px]">
+                        {reservationQuote.vehicle.plateNo}
+                      </span>
+                    )}
+                  </div>
                   <div className="flex items-center space-x-1.5 text-slate-500 text-[9px] mt-0.5">
                     <span>{reservationQuote.vehicle.seats || 5} Seats</span>
                     <span>•</span>
@@ -212,9 +219,11 @@ export const ReservationsPage: React.FC = () => {
               onClick={handleCheckAvailability}
               disabled={isBusy}
               className="px-2 py-0.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded font-semibold flex items-center space-x-1"
+              title="Search vehicle availability with 7 filters (Branch, Reg Status, Plate, Model, Fleet, Chassis, Group)"
             >
               <Search className="w-2.5 h-2.5" />
-              <span>Check Availability</span>
+              <span>Check Vehicle Availability</span>
+              <span className="bg-blue-500 text-white text-[8px] px-1 rounded font-bold">7 Filters</span>
             </button>
             <button
               onClick={() => triggerNotice('Quote emailed to customer!')}
