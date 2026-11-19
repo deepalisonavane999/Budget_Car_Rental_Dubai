@@ -49,7 +49,7 @@ export const BillingPage: React.FC = () => {
   const [lowerTab, setLowerTab] = useState<'bookings' | 'vouchers' | 'invoice_lines'>('bookings');
   const [actionSuccessMsg, setActionSuccessMsg] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState<number>(1);
-  const [pageSize, setPageSize] = useState<number>(50);
+  const [pageSize, setPageSize] = useState<number>(10);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -475,10 +475,10 @@ export const BillingPage: React.FC = () => {
                         }}
                         className="bg-slate-50 border border-slate-300 rounded px-1.5 py-0.5 text-[10px] font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
                       >
-                        <option value={10}>10</option>
-                        <option value={25}>25</option>
-                        <option value={50}>50</option>
-                        <option value={100}>100</option>
+                        <option value={10}>10 / page</option>
+                        <option value={15}>15 / page</option>
+                        <option value={25}>25 / page</option>
+                        <option value={50}>50 / page</option>
                       </select>
                     </div>
                   )}
@@ -487,7 +487,7 @@ export const BillingPage: React.FC = () => {
                 {/* Tab 1: Bookings & Agreements */}
                 {lowerTab === 'bookings' && (
                   <div className="border border-slate-200 rounded overflow-hidden">
-                    <div className="overflow-x-auto max-h-[520px] overflow-y-auto">
+                    <div className="overflow-x-auto max-h-[340px] overflow-y-auto">
                       <table className="w-full text-left text-[11px]">
                         <thead className="bg-slate-50 text-[10px] text-slate-500 font-semibold border-b border-slate-200 uppercase tracking-wider sticky top-0 z-10 shadow-2xs">
                           <tr>
@@ -508,32 +508,32 @@ export const BillingPage: React.FC = () => {
 
                               return (
                                 <tr key={b.id || bNo} className="hover:bg-blue-50/40 transition-colors">
-                                  <td className="py-2 px-3">
+                                  <td className="py-1 px-3">
                                     <span className="font-mono font-bold text-slate-900 text-xs block">{bNo}</span>
                                     <span className="text-[9px] text-slate-400">
                                       {b.vehicleGroup?.name ? `Group ${b.vehicleGroup.name}` : 'Rental Vehicle'}
                                     </span>
                                   </td>
-                                  <td className="py-2 px-3">
+                                  <td className="py-1 px-3">
                                     <Badge variant={isClosed ? 'gray' : 'green'} className="text-[9px] py-0 px-1.5">
                                       {b.bookingStatus || 'Active'}
                                     </Badge>
                                   </td>
-                                  <td className="py-2 px-3">
+                                  <td className="py-1 px-3">
                                     <span className="font-mono font-bold text-slate-800 text-[10px] px-1.5 py-0.5 bg-slate-100 rounded border border-slate-200">
                                       {plate}
                                     </span>
                                   </td>
-                                  <td className="py-2 px-3 text-slate-600 text-[10px]">
+                                  <td className="py-1 px-3 text-slate-600 text-[10px]">
                                     <span>{b.startDate?.split('T')[0] || '—'} → {b.endDate?.split('T')[0] || '—'}</span>
                                     {b.location && (
                                       <span className="text-slate-400 block text-[9px]">{b.location}</span>
                                     )}
                                   </td>
-                                  <td className="py-2 px-3 font-mono font-bold text-slate-900">
+                                  <td className="py-1 px-3 font-mono font-bold text-slate-900">
                                     AED {Number(b.totalCharges || 0).toLocaleString()}
                                   </td>
-                                  <td className="py-2 px-3 text-right">
+                                  <td className="py-1 px-3 text-right">
                                     <div className="flex items-center justify-end space-x-1.5">
                                       <button
                                         type="button"
@@ -700,7 +700,7 @@ export const BillingPage: React.FC = () => {
                     </div>
 
                     <div className="border border-slate-200 rounded overflow-hidden">
-                      <div className="overflow-x-auto max-h-[520px] overflow-y-auto">
+                      <div className="overflow-x-auto max-h-[340px] overflow-y-auto">
                         <table className="w-full text-left text-[11px]">
                           <thead className="bg-slate-50 text-[10px] text-slate-500 font-semibold border-b border-slate-200 uppercase tracking-wider sticky top-0 z-10 shadow-2xs">
                             <tr>
@@ -818,7 +818,7 @@ export const BillingPage: React.FC = () => {
                     </div>
 
                     <div className="border border-slate-200 rounded overflow-hidden">
-                      <div className="overflow-x-auto max-h-[520px] overflow-y-auto">
+                      <div className="overflow-x-auto max-h-[340px] overflow-y-auto">
                         <table className="w-full text-left text-[11px]">
                           <thead className="bg-slate-50 text-[10px] text-slate-500 font-semibold border-b border-slate-200 uppercase tracking-wider sticky top-0 z-10 shadow-2xs">
                             <tr>
