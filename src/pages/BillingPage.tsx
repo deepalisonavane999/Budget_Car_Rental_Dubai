@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   FileText,
   CreditCard,
@@ -19,6 +19,11 @@ import {
   Calendar,
   ArrowRight,
   Loader2,
+  Mail,
+  Send,
+  X,
+  Filter,
+  RotateCcw,
 } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { Badge } from '../components/common/Badge';
@@ -29,6 +34,7 @@ import { useNavigate } from 'react-router-dom';
 
 export const BillingPage: React.FC = () => {
   const {
+    customer,
     billingSummary,
     activeRental,
     previousRental,
@@ -42,6 +48,7 @@ export const BillingPage: React.FC = () => {
     isLoadingBillingAgreement,
     bookingResults,
     isSearchingBooking,
+    executeBookingFilter,
   } = useWorkspace();
   const navigate = useNavigate();
   const [selectedRentalType, setSelectedRentalType] = useState<'previous' | 'active'>('previous');
@@ -51,12 +58,59 @@ export const BillingPage: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(10);
 
+  // Agreement Date-Based and Search Filtering
+  const [agreementFromDate, setAgreementFromDate] = useState<string>('');
+  const [agreementToDate, setAgreementToDate] = useState<string>('');
+  const [agreementStatusFilter, setAgreementStatusFilter] = useState<string>('all');
+  const [agreementSearchQuery, setAgreementSearchQuery] = useState<string>('');
+
+  // Email Dispatch Modal (Genesys Cloud Integration)
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
+  const [emailDocType, setEmailDocType] = useState<'voucher' | 'invoice' | 'soa'>('voucher');
+  const [emailSelectedRef, setEmailSelectedRef] = useState<string>('');
+  const [emailRecipient, setEmailRecipient] = useState<string>(customer.email || 'customer@example.com');
+  const [emailNotes, setEmailNotes] = useState<string>('');
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+
+  // Filter Agreements based on Date Range, Status & Search Query
+  const filteredAgreements = useMemo(() => {
+    return bookingResults.filter((b) => {
+      const bNo = (b.bookingNo || b.agreementNo || `BKG-${b.id}`).toLowerCase();
+      const plate = ((b as any).vehicle?.plateNo || (b as any).plateNo || '').toLowerCase();
+
+      // Text search
+      if (agreementSearchQuery.trim()) {
+        const q = agreementSearchQuery.trim().toLowerCase();
+        if (!bNo.includes(q) && !plate.includes(q)) return false;
+      }
+
+      // Status filter
+      if (agreementStatusFilter !== 'all') {
+        const status = b.bookingStatus || 'Active';
+        if (agreementStatusFilter === 'Active' && status !== 'Active' && status !== 'Open') return false;
+        if (agreementStatusFilter === 'Closed' && status !== 'Closed' && status !== 'Returned') return false;
+      }
+
+      // Date-based filter
+      if (agreementFromDate) {
+        const bStartDate = (b.startDate || '').split('T')[0];
+        if (bStartDate && bStartDate < agreementFromDate) return false;
+      }
+      if (agreementToDate) {
+        const bEndDate = (b.endDate || b.startDate || '').split('T')[0];
+        if (bEndDate && bEndDate > agreementToDate) return false;
+      }
+
+      return true;
+    });
+  }, [bookingResults, agreementSearchQuery, agreementStatusFilter, agreementFromDate, agreementToDate]);
+
   useEffect(() => {
     setCurrentPage(1);
-  }, [bookingResults]);
+  }, [filteredAgreements]);
 
-  const totalPages = Math.ceil(bookingResults.length / pageSize) || 1;
-  const paginatedBookings = bookingResults.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const totalPages = Math.ceil(filteredAgreements.length / pageSize) || 1;
+  const paginatedBookings = filteredAgreements.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   const getPageNumbers = () => {
     if (totalPages <= 7) {
@@ -80,13 +134,49 @@ export const BillingPage: React.FC = () => {
     setTimeout(() => setActionSuccessMsg(null), 4000);
   };
 
-  const handleSendInvoice = async () => {
-    const res = await fetchInvoiceDetails(billingSummary.invoiceNo);
-    showFeedback(res.message);
+  const handleSendInvoice = () => {
+    handleOpenEmailModal('invoice', billingSummary.invoiceNo);
   };
 
-  const handleSendStatement = async () => {
-    const res = await fetchStatementOfAccounts();
+  const handleSendStatement = () => {
+    handleOpenEmailModal('soa', displayedRental.agreementNo);
+  };
+
+  const handleOpenEmailModal = (type: 'voucher' | 'invoice' | 'soa', refNo?: string) => {
+    setEmailDocType(type);
+    setEmailSelectedRef(refNo || (type === 'invoice' ? billingSummary.invoiceNo : displayedRental.agreementNo));
+    setEmailRecipient(customer.email && customer.email !== '—' ? customer.email : 'customer@example.com');
+    setEmailNotes('');
+    setIsEmailModalOpen(true);
+  };
+
+  const handleDispatchEmail = async () => {
+    setIsSendingEmail(true);
+    // Simulate Genesys Cloud Email Dispatch API call
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    setIsSendingEmail(false);
+    setIsEmailModalOpen(false);
+    const docLabel =
+      emailDocType === 'voucher'
+        ? `Payment Receipt (${emailSelectedRef})`
+        : emailDocType === 'invoice'
+        ? `Tax Invoice (${emailSelectedRef})`
+        : `Consolidated Statement of Account (SOA)`;
+    showFeedback(`✓ ${docLabel} sent to ${emailRecipient} via Genesys Cloud Email!`);
+  };
+
+  const handleApplyApiDateFilter = async () => {
+    const custId =
+      customer.id && customer.id !== '—'
+        ? parseInt(String(customer.id).replace(/\D/g, ''), 10)
+        : undefined;
+    const res = await executeBookingFilter({
+      customerId: custId,
+      fromDate: agreementFromDate ? `${agreementFromDate}T00:00:00` : undefined,
+      toDate: agreementToDate ? `${agreementToDate}T23:59:59` : undefined,
+      status: agreementStatusFilter !== 'all' ? agreementStatusFilter : undefined,
+      bookingNo: agreementSearchQuery.trim() || undefined,
+    });
     showFeedback(res.message);
   };
 
@@ -343,36 +433,40 @@ export const BillingPage: React.FC = () => {
             </div>
 
             {/* 3. Available Actions Bar */}
-            <div className="bg-white border border-slate-200 rounded p-1.5 shadow-2xs flex items-center space-x-1.5 text-[10px]">
+            <div className="bg-white border border-slate-200 rounded p-1.5 shadow-2xs flex flex-wrap items-center gap-1.5 text-[10px]">
               <span className="font-bold text-slate-800 mr-1">Actions:</span>
               <button
-                onClick={handleSendInvoice}
-                className="px-2 py-0.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded font-semibold flex items-center space-x-1"
+                type="button"
+                onClick={() => handleOpenEmailModal('invoice', billingSummary.invoiceNo)}
+                className="px-2 py-0.5 bg-blue-50 border border-blue-200 hover:bg-blue-100 text-blue-700 rounded font-semibold flex items-center space-x-1 cursor-pointer"
+                title="Send official tax invoice via Genesys Cloud"
               >
-                <FileText className="w-2.5 h-2.5 text-slate-500" />
-                <span>Send Invoice</span>
+                <Mail className="w-2.5 h-2.5 text-blue-600" />
+                <span>Email Invoice (Genesys)</span>
               </button>
               <button
-                onClick={handleSendStatement}
-                className="px-2 py-0.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded font-semibold flex items-center space-x-1"
+                type="button"
+                onClick={() => handleOpenEmailModal('soa', displayedRental.agreementNo)}
+                className="px-2 py-0.5 bg-blue-600 hover:bg-blue-700 text-white rounded font-semibold flex items-center space-x-1 cursor-pointer shadow-2xs"
+                title="Send Consolidated Statement of Account (SOA) via Genesys Cloud"
               >
-                <FileText className="w-2.5 h-2.5 text-slate-500" />
-                <span>Send Statement</span>
+                <Send className="w-2.5 h-2.5 text-white" />
+                <span>Email Consolidated SOA (Genesys)</span>
               </button>
               <button
                 type="button"
                 onClick={() => setLowerTab('invoice_lines')}
-                className="px-2 py-0.5 bg-blue-50 border border-blue-200 hover:bg-blue-100 text-blue-700 rounded font-semibold flex items-center space-x-1 cursor-pointer"
+                className="px-2 py-0.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded font-semibold flex items-center space-x-1 cursor-pointer"
               >
-                <FileText className="w-2.5 h-2.5 text-blue-600" />
+                <FileText className="w-2.5 h-2.5 text-slate-500" />
                 <span>View Invoice</span>
               </button>
               <button
                 type="button"
                 onClick={() => setLowerTab('vouchers')}
-                className="px-2 py-0.5 bg-blue-50 border border-blue-200 hover:bg-blue-100 text-blue-700 rounded font-semibold flex items-center space-x-1 cursor-pointer"
+                className="px-2 py-0.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded font-semibold flex items-center space-x-1 cursor-pointer"
               >
-                <Receipt className="w-2.5 h-2.5 text-blue-600" />
+                <Receipt className="w-2.5 h-2.5 text-slate-500" />
                 <span>Explore Vouchers</span>
               </button>
               <button
@@ -418,16 +512,16 @@ export const BillingPage: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setLowerTab('bookings')}
-                      className={`flex items-center space-x-1 px-3 py-1 rounded transition-all cursor-pointer ${
+                      className={`flex items-center space-x-1.5 px-3 py-1 rounded transition-all cursor-pointer ${
                         lowerTab === 'bookings'
                           ? 'bg-white text-blue-600 shadow-2xs font-bold'
                           : 'text-slate-600 hover:text-slate-900'
                       }`}
                     >
                       <Calendar className="w-3.5 h-3.5" />
-                      <span>All Bookings & Agreements</span>
+                      <span>1. Rental Agreements</span>
                       <span className="text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.2 rounded-full font-mono">
-                        {bookingResults.length}
+                        {filteredAgreements.length}
                       </span>
                     </button>
 
@@ -441,7 +535,7 @@ export const BillingPage: React.FC = () => {
                       }`}
                     >
                       <Receipt className="w-3.5 h-3.5" />
-                      <span>Vouchers ({billingSummary.agreementNo || displayedRental.agreementNo})</span>
+                      <span>2. Vouchers (Payment Receipts)</span>
                       <span className="text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.2 rounded-full font-mono">
                         {selectedAgreementVouchers.length}
                       </span>
@@ -450,14 +544,14 @@ export const BillingPage: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setLowerTab('invoice_lines')}
-                      className={`flex items-center space-x-1 px-3 py-1 rounded transition-all cursor-pointer ${
+                      className={`flex items-center space-x-1.5 px-3 py-1 rounded transition-all cursor-pointer ${
                         lowerTab === 'invoice_lines'
                           ? 'bg-white text-blue-600 shadow-2xs font-bold'
                           : 'text-slate-600 hover:text-slate-900'
                       }`}
                     >
                       <FileText className="w-3.5 h-3.5" />
-                      <span>Invoice Lines ({billingSummary.invoiceNo || 'INV-387951'})</span>
+                      <span>3. Invoices (Amounts Charged)</span>
                       <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded-full font-mono">
                         {selectedInvoiceLines.length}
                       </span>
@@ -486,122 +580,225 @@ export const BillingPage: React.FC = () => {
 
                 {/* Tab 1: Bookings & Agreements */}
                 {lowerTab === 'bookings' && (
-                  <div className="border border-slate-200 rounded overflow-hidden">
-                    <div className="overflow-x-auto max-h-[340px] overflow-y-auto">
-                      <table className="w-full text-left text-[11px]">
-                        <thead className="bg-slate-50 text-[10px] text-slate-500 font-semibold border-b border-slate-200 uppercase tracking-wider sticky top-0 z-10 shadow-2xs">
-                          <tr>
-                            <th className="py-1.5 px-3 bg-slate-50">Booking / Agreement #</th>
-                            <th className="py-1.5 px-3 bg-slate-50">Status</th>
-                            <th className="py-1.5 px-3 bg-slate-50">Assigned Plate</th>
-                            <th className="py-1.5 px-3 bg-slate-50">Rental Dates</th>
-                            <th className="py-1.5 px-3 bg-slate-50">Total Charges</th>
-                            <th className="py-1.5 px-3 bg-slate-50 text-right">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                          {paginatedBookings.length > 0 ? (
-                            paginatedBookings.map((b) => {
-                              const bNo = b.bookingNo || b.agreementNo || `BKG-${b.id}`;
-                              const plate = (b as any).vehicle?.plateNo || (b as any).plateNo || '32849-EE-DXB';
-                              const isClosed = b.bookingStatus === 'Closed';
+                  <div className="space-y-2">
+                    {/* Date-Based and Status Filter Toolbar */}
+                    <div className="bg-slate-50 p-2 rounded-lg border border-slate-200 flex flex-wrap items-center justify-between gap-2 text-[10px]">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-bold text-slate-700 flex items-center space-x-1">
+                          <Filter className="w-3 h-3 text-blue-600" />
+                          <span>Filter Agreements:</span>
+                        </span>
 
-                              return (
-                                <tr key={b.id || bNo} className="hover:bg-blue-50/40 transition-colors">
-                                  <td className="py-1 px-3">
-                                    <span className="font-mono font-bold text-slate-900 text-xs block">{bNo}</span>
-                                    <span className="text-[9px] text-slate-400">
-                                      {b.vehicleGroup?.name ? `Group ${b.vehicleGroup.name}` : 'Rental Vehicle'}
-                                    </span>
-                                  </td>
-                                  <td className="py-1 px-3">
-                                    <Badge variant={isClosed ? 'gray' : 'green'} className="text-[9px] py-0 px-1.5">
-                                      {b.bookingStatus || 'Active'}
-                                    </Badge>
-                                  </td>
-                                  <td className="py-1 px-3">
-                                    <span className="font-mono font-bold text-slate-800 text-[10px] px-1.5 py-0.5 bg-slate-100 rounded border border-slate-200">
-                                      {plate}
-                                    </span>
-                                  </td>
-                                  <td className="py-1 px-3 text-slate-600 text-[10px]">
-                                    <span>{b.startDate?.split('T')[0] || '—'} → {b.endDate?.split('T')[0] || '—'}</span>
-                                    {b.location && (
-                                      <span className="text-slate-400 block text-[9px]">{b.location}</span>
-                                    )}
-                                  </td>
-                                  <td className="py-1 px-3 font-mono font-bold text-slate-900">
-                                    AED {Number(b.totalCharges || 0).toLocaleString()}
-                                  </td>
-                                  <td className="py-1 px-3 text-right">
-                                    <div className="flex items-center justify-end space-x-1.5">
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          const params = new URLSearchParams(window.location.search);
-                                          params.set('op', 'accidents');
-                                          params.set('plate', plate);
-                                          navigate(`/operations?${params.toString()}`);
-                                        }}
-                                        className="px-2 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded text-[9px] font-semibold flex items-center space-x-0.5 transition-colors cursor-pointer"
-                                        title="Check Accident & Police Reports for this plate"
-                                      >
-                                        <AlertTriangle className="w-2.5 h-2.5 text-amber-600" />
-                                        <span>Accidents</span>
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={async () => {
-                                          const res = await loadBillingForAgreement(bNo, (b as any).customerId);
-                                          showFeedback(res.message);
-                                          setLowerTab('vouchers');
-                                        }}
-                                        className="px-2.5 py-0.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-[10px] font-semibold flex items-center space-x-1 transition-colors cursor-pointer"
-                                      >
-                                        <span>Load for Billing</span>
-                                        <ArrowRight className="w-2.5 h-2.5" />
-                                      </button>
-                                    </div>
-                                  </td>
-                                </tr>
-                              );
-                            })
-                          ) : (
-                            <tr>
-                              <td colSpan={6} className="py-8 text-center text-slate-400 text-xs">
-                                No bookings found for this customer.
-                              </td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
+                        <div className="flex items-center space-x-1">
+                          <span className="text-slate-500 font-medium">From:</span>
+                          <input
+                            type="date"
+                            value={agreementFromDate}
+                            onChange={(e) => setAgreementFromDate(e.target.value)}
+                            className="px-1.5 py-0.5 bg-white border border-slate-300 rounded text-[10px] text-slate-700 focus:ring-1 focus:ring-blue-500"
+                          />
+                        </div>
+
+                        <div className="flex items-center space-x-1">
+                          <span className="text-slate-500 font-medium">To:</span>
+                          <input
+                            type="date"
+                            value={agreementToDate}
+                            onChange={(e) => setAgreementToDate(e.target.value)}
+                            className="px-1.5 py-0.5 bg-white border border-slate-300 rounded text-[10px] text-slate-700 focus:ring-1 focus:ring-blue-500"
+                          />
+                        </div>
+
+                        <div className="flex items-center space-x-1">
+                          <span className="text-slate-500 font-medium">Status:</span>
+                          <select
+                            value={agreementStatusFilter}
+                            onChange={(e) => setAgreementStatusFilter(e.target.value)}
+                            className="px-1.5 py-0.5 bg-white border border-slate-300 rounded text-[10px] text-slate-700 focus:ring-1 focus:ring-blue-500 cursor-pointer"
+                          >
+                            <option value="all">All Statuses</option>
+                            <option value="Active">Active</option>
+                            <option value="Closed">Closed / Returned</option>
+                          </select>
+                        </div>
+
+                        <div className="relative">
+                          <Search className="w-2.5 h-2.5 text-slate-400 absolute left-1.5 top-1.5 pointer-events-none" />
+                          <input
+                            type="text"
+                            value={agreementSearchQuery}
+                            onChange={(e) => setAgreementSearchQuery(e.target.value)}
+                            placeholder="Agreement # or plate..."
+                            className="pl-5 pr-2 py-0.5 bg-white border border-slate-300 rounded text-[10px] text-slate-700 focus:ring-1 focus:ring-blue-500 w-36"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex items-center space-x-1.5">
+                        {(agreementFromDate || agreementToDate || agreementStatusFilter !== 'all' || agreementSearchQuery) && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAgreementFromDate('');
+                              setAgreementToDate('');
+                              setAgreementStatusFilter('all');
+                              setAgreementSearchQuery('');
+                            }}
+                            className="px-2 py-0.5 bg-white hover:bg-slate-100 text-slate-600 border border-slate-300 rounded text-[10px] font-medium flex items-center space-x-0.5 cursor-pointer"
+                            title="Reset filters"
+                          >
+                            <RotateCcw className="w-2.5 h-2.5 text-slate-500" />
+                            <span>Reset</span>
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={handleApplyApiDateFilter}
+                          disabled={isSearchingBooking}
+                          className="px-2.5 py-0.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-[10px] font-semibold flex items-center space-x-1 transition-colors cursor-pointer shadow-2xs"
+                        >
+                          <Search className="w-2.5 h-2.5" />
+                          <span>Search Speed API</span>
+                        </button>
+                      </div>
                     </div>
 
-                    {/* Pagination Controls */}
-                    {bookingResults.length > 0 && (
-                      <div className="flex items-center justify-between px-3 py-2 bg-slate-50 border-t border-slate-200 text-[10px]">
-                        <div className="flex items-center space-x-3 text-slate-500">
-                          <span>
-                            Showing{' '}
-                            <span className="font-semibold text-slate-800">
-                              {(currentPage - 1) * pageSize + 1}
-                            </span>{' '}
-                            to{' '}
-                            <span className="font-semibold text-slate-800">
-                              {Math.min(currentPage * pageSize, bookingResults.length)}
-                            </span>{' '}
-                            of{' '}
-                            <span className="font-semibold text-slate-800">
-                              {bookingResults.length}
-                            </span>{' '}
-                            bookings
-                          </span>
-                          <span className="text-slate-300">|</span>
-                          <span>
-                            Page <span className="font-semibold text-slate-800">{currentPage}</span> of{' '}
-                            <span className="font-semibold text-slate-800">{totalPages}</span>
-                          </span>
-                        </div>
+                    <div className="border border-slate-200 rounded overflow-hidden">
+                      <div className="overflow-x-auto max-h-[340px] overflow-y-auto">
+                        <table className="w-full text-left text-[11px]">
+                          <thead className="bg-slate-50 text-[10px] text-slate-500 font-semibold border-b border-slate-200 uppercase tracking-wider sticky top-0 z-10 shadow-2xs">
+                            <tr>
+                              <th className="py-1.5 px-3 bg-slate-50">Booking / Agreement #</th>
+                              <th className="py-1.5 px-3 bg-slate-50">Status</th>
+                              <th className="py-1.5 px-3 bg-slate-50">Assigned Plate</th>
+                              <th className="py-1.5 px-3 bg-slate-50">Rental Dates</th>
+                              <th className="py-1.5 px-3 bg-slate-50">Total Charges</th>
+                              <th className="py-1.5 px-3 bg-slate-50 text-right">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {paginatedBookings.length > 0 ? (
+                              paginatedBookings.map((b) => {
+                                const bNo = b.bookingNo || b.agreementNo || `BKG-${b.id}`;
+                                const plate = (b as any).vehicle?.plateNo || (b as any).plateNo || '32849-EE-DXB';
+                                const isClosed = b.bookingStatus === 'Closed';
+                                const isSelected =
+                                  bNo === (billingSummary.agreementNo || displayedRental.agreementNo);
+
+                                return (
+                                  <tr
+                                    key={b.id || bNo}
+                                    className={`transition-colors ${
+                                      isSelected
+                                        ? 'bg-blue-50/60 ring-1 ring-blue-300'
+                                        : 'hover:bg-blue-50/40'
+                                    }`}
+                                  >
+                                    <td className="py-1 px-3">
+                                      <div className="flex items-center space-x-1.5">
+                                        <span className="font-mono font-bold text-slate-900 text-xs block">{bNo}</span>
+                                        {isSelected && (
+                                          <span className="text-[8px] bg-blue-600 text-white font-bold px-1.5 py-0.2 rounded uppercase">
+                                            Active
+                                          </span>
+                                        )}
+                                      </div>
+                                      <span className="text-[9px] text-slate-400">
+                                        {b.vehicleGroup?.name ? `Group ${b.vehicleGroup.name}` : 'Rental Vehicle'}
+                                      </span>
+                                    </td>
+                                    <td className="py-1 px-3">
+                                      <Badge variant={isClosed ? 'gray' : 'green'} className="text-[9px] py-0 px-1.5">
+                                        {b.bookingStatus || 'Active'}
+                                      </Badge>
+                                    </td>
+                                    <td className="py-1 px-3">
+                                      <span className="font-mono font-bold text-slate-800 text-[10px] px-1.5 py-0.5 bg-slate-100 rounded border border-slate-200">
+                                        {plate}
+                                      </span>
+                                    </td>
+                                    <td className="py-1 px-3 text-slate-600 text-[10px]">
+                                      <span>{b.startDate?.split('T')[0] || '—'} → {b.endDate?.split('T')[0] || '—'}</span>
+                                      {b.location && (
+                                        <span className="text-slate-400 block text-[9px]">{b.location}</span>
+                                      )}
+                                    </td>
+                                    <td className="py-1 px-3 font-mono font-bold text-slate-900">
+                                      AED {Number(b.totalCharges || 0).toLocaleString()}
+                                    </td>
+                                    <td className="py-1 px-3 text-right">
+                                      <div className="flex items-center justify-end space-x-1.5">
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const params = new URLSearchParams(window.location.search);
+                                            params.set('op', 'accidents');
+                                            params.set('plate', plate);
+                                            navigate(`/operations?${params.toString()}`);
+                                          }}
+                                          className="px-2 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded text-[9px] font-semibold flex items-center space-x-0.5 transition-colors cursor-pointer"
+                                          title="Check Accident & Police Reports for this plate"
+                                        >
+                                          <AlertTriangle className="w-2.5 h-2.5 text-amber-600" />
+                                          <span>Accidents</span>
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={async () => {
+                                            const res = await loadBillingForAgreement(bNo, (b as any).customerId);
+                                            showFeedback(res.message);
+                                            setLowerTab('vouchers');
+                                          }}
+                                          className={`px-2.5 py-0.5 rounded text-[10px] font-semibold flex items-center space-x-1 transition-colors cursor-pointer ${
+                                            isSelected
+                                              ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs'
+                                              : 'bg-blue-600 hover:bg-blue-700 text-white shadow-2xs'
+                                          }`}
+                                        >
+                                          <span>{isSelected ? 'Loaded' : 'Load for Billing'}</span>
+                                          <ArrowRight className="w-2.5 h-2.5" />
+                                        </button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              })
+                            ) : (
+                              <tr>
+                                <td colSpan={6} className="py-8 text-center text-slate-400 text-xs">
+                                  No agreements matched the selected date and search filters.
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* Pagination Controls */}
+                      {filteredAgreements.length > 0 && (
+                        <div className="flex items-center justify-between px-3 py-2 bg-slate-50 border-t border-slate-200 text-[10px]">
+                          <div className="flex items-center space-x-3 text-slate-500">
+                            <span>
+                              Showing{' '}
+                              <span className="font-semibold text-slate-800">
+                                {(currentPage - 1) * pageSize + 1}
+                              </span>{' '}
+                              to{' '}
+                              <span className="font-semibold text-slate-800">
+                                {Math.min(currentPage * pageSize, filteredAgreements.length)}
+                              </span>{' '}
+                              of{' '}
+                              <span className="font-semibold text-slate-800">
+                                {filteredAgreements.length}
+                              </span>{' '}
+                              agreements
+                            </span>
+                            <span className="text-slate-300">|</span>
+                            <span>
+                              Page <span className="font-semibold text-slate-800">{currentPage}</span> of{' '}
+                              <span className="font-semibold text-slate-800">{totalPages}</span>
+                            </span>
+                          </div>
 
                         <div className="flex items-center space-x-1">
                           <button
@@ -674,11 +871,29 @@ export const BillingPage: React.FC = () => {
                       </div>
                     )}
                   </div>
-                )}
+                </div>
+              )}
 
                 {/* Tab 2: Vouchers for Selected Agreement */}
                 {lowerTab === 'vouchers' && (
                   <div className="space-y-1.5 animate-fade-in">
+                    {/* Voucher Clarification Banner */}
+                    <div className="bg-blue-50/70 border border-blue-200 rounded px-2.5 py-1.5 text-[10px] text-blue-900 flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <strong>Payment Receipts (Vouchers):</strong> Represent incoming payments, deposits, and refunds retrieved for Agreement{' '}
+                        <span className="font-mono font-bold text-blue-950">{billingSummary.agreementNo || displayedRental.agreementNo}</span>.
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenEmailModal('soa', billingSummary.agreementNo || displayedRental.agreementNo)}
+                        className="px-2.5 py-0.5 bg-blue-600 hover:bg-blue-700 text-white rounded font-semibold text-[10px] flex items-center space-x-1 cursor-pointer shrink-0 shadow-2xs"
+                        title="Email Consolidated Statement of Account (all vouchers & payments) via Genesys Cloud"
+                      >
+                        <Send className="w-2.5 h-2.5 text-white" />
+                        <span>Email Statement (SOA)</span>
+                      </button>
+                    </div>
+
                     <div className="flex items-center justify-between text-[11px] px-1 py-0.5 text-slate-500">
                       <div className="flex items-center space-x-2">
                         <button
@@ -687,11 +902,11 @@ export const BillingPage: React.FC = () => {
                           className="text-blue-600 hover:text-blue-800 font-semibold flex items-center space-x-0.5 transition-colors cursor-pointer"
                         >
                           <ChevronLeft className="w-3.5 h-3.5" />
-                          <span>All Bookings</span>
+                          <span>All Agreements</span>
                         </button>
                         <span className="text-slate-300">/</span>
                         <span className="text-slate-800 font-medium">
-                          Vouchers for <span className="font-mono font-semibold text-slate-900">{billingSummary.agreementNo || displayedRental.agreementNo}</span>
+                          Payment Vouchers for <span className="font-mono font-semibold text-slate-900">{billingSummary.agreementNo || displayedRental.agreementNo}</span>
                         </span>
                       </div>
                       <span className="text-[10px] text-slate-400">
@@ -721,11 +936,11 @@ export const BillingPage: React.FC = () => {
 
                                 return (
                                   <tr key={v.id || v.voucherNo} className="hover:bg-blue-50/40 transition-colors">
-                                    <td className="py-2 px-3">
+                                    <td className="py-1.5 px-3">
                                       <span className="font-mono font-bold text-slate-900 text-xs block">{v.voucherNo}</span>
                                       <span className="text-[9px] text-slate-400">ID: {v.id}</span>
                                     </td>
-                                    <td className="py-2 px-3">
+                                    <td className="py-1.5 px-3">
                                       <Badge
                                         variant={
                                           isInvoice
@@ -738,25 +953,34 @@ export const BillingPage: React.FC = () => {
                                         }
                                         className="text-[9px] py-0 px-1.5"
                                       >
-                                        {v.voucherTypesName || 'Voucher'}
+                                        {v.voucherTypesName || 'Payment Receipt'}
                                       </Badge>
                                     </td>
-                                    <td className="py-2 px-3 text-slate-600 text-[10px]">
+                                    <td className="py-1.5 px-3 text-slate-600 text-[10px]">
                                       {v.date?.split('T')[0] || '—'}
                                     </td>
-                                    <td className="py-2 px-3 font-mono font-bold text-slate-900">
+                                    <td className="py-1.5 px-3 font-mono font-bold text-slate-900">
                                       AED {Number(v.amount || 0).toLocaleString()}
                                     </td>
-                                    <td className="py-2 px-3 font-mono text-slate-700">
+                                    <td className="py-1.5 px-3 font-mono text-slate-700">
                                       AED {Number(v.allocatedAmount ?? v.amount ?? 0).toLocaleString()}
                                     </td>
-                                    <td className="py-2 px-3">
+                                    <td className="py-1.5 px-3">
                                       <Badge variant={v.isClosed ? 'gray' : 'green'} className="text-[9px] py-0 px-1.5">
                                         {v.statusText || (v.isClosed ? 'Closed' : 'Open')}
                                       </Badge>
                                     </td>
-                                    <td className="py-2 px-3 text-right">
+                                    <td className="py-1.5 px-3 text-right">
                                       <div className="flex items-center justify-end space-x-1.5">
+                                        <button
+                                          type="button"
+                                          onClick={() => handleOpenEmailModal('voucher', v.voucherNo)}
+                                          className="px-2 py-0.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded text-[9px] font-semibold flex items-center space-x-1 transition-colors cursor-pointer"
+                                          title="Email this payment receipt to customer via Genesys Cloud"
+                                        >
+                                          <Mail className="w-2.5 h-2.5 text-blue-600" />
+                                          <span>Email Receipt</span>
+                                        </button>
                                         {v.url && (
                                           <a
                                             href={v.url}
@@ -786,7 +1010,7 @@ export const BillingPage: React.FC = () => {
                             ) : (
                               <tr>
                                 <td colSpan={7} className="py-8 text-center text-slate-400 text-xs">
-                                  No vouchers recorded for agreement {billingSummary.agreementNo || displayedRental.agreementNo}. Click "Load for Billing" on any agreement above.
+                                  No payment vouchers recorded for agreement {billingSummary.agreementNo || displayedRental.agreementNo}. Click "Load for Billing" on any agreement above.
                                 </td>
                               </tr>
                             )}
@@ -799,7 +1023,24 @@ export const BillingPage: React.FC = () => {
 
                 {/* Tab 3: Invoice Lines Breakdown */}
                 {lowerTab === 'invoice_lines' && (
-                  <div className="space-y-1.5">
+                  <div className="space-y-1.5 animate-fade-in">
+                    {/* Invoice Clarification Banner */}
+                    <div className="bg-emerald-50/70 border border-emerald-200 rounded px-2.5 py-1.5 text-[10px] text-emerald-900 flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <strong>Invoices (Amounts Charged):</strong> Itemized charges (rental fee, toll/salik, fines, VAT) billed to customer for Agreement{' '}
+                        <span className="font-mono font-bold text-emerald-950">{billingSummary.agreementNo || displayedRental.agreementNo}</span>.
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenEmailModal('invoice', billingSummary.invoiceNo)}
+                        className="px-2.5 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-semibold text-[10px] flex items-center space-x-1 cursor-pointer shrink-0 shadow-2xs"
+                        title="Email this official tax invoice to customer via Genesys Cloud"
+                      >
+                        <Mail className="w-2.5 h-2.5 text-white" />
+                        <span>Email Invoice to Customer</span>
+                      </button>
+                    </div>
+
                     <div className="flex items-center justify-between text-[11px] px-1 pb-1">
                       <div className="flex items-center space-x-2">
                         <button
@@ -838,24 +1079,24 @@ export const BillingPage: React.FC = () => {
                                 const total = Number((line.credit || 0) + (line.tax || 0)).toFixed(2);
                                 return (
                                   <tr key={line.id || idx} className="hover:bg-blue-50/40 transition-colors">
-                                    <td className="py-2 px-3 font-mono text-slate-500">{line.srNo || idx + 1}</td>
-                                    <td className="py-2 px-3 font-medium text-slate-800">
+                                    <td className="py-1.5 px-3 font-mono text-slate-500">{line.srNo || idx + 1}</td>
+                                    <td className="py-1.5 px-3 font-medium text-slate-800">
                                       {line.chargesType?.name || 'Rental Fee'}
                                     </td>
-                                    <td className="py-2 px-3 text-slate-600">{line.description || 'Basic Rental'}</td>
-                                    <td className="py-2 px-3">
+                                    <td className="py-1.5 px-3 text-slate-600">{line.description || 'Basic Rental'}</td>
+                                    <td className="py-1.5 px-3">
                                       <span className="font-mono text-[10px] px-1.5 py-0.5 bg-slate-100 rounded border border-slate-200 text-slate-800">
                                         {line.vehicle?.plateNo || displayedRental.vehicle.plateNo}
                                       </span>
                                     </td>
-                                    <td className="py-2 px-3 font-mono">{line.quantity || 1}</td>
-                                    <td className="py-2 px-3 font-mono">
+                                    <td className="py-1.5 px-3 font-mono">{line.quantity || 1}</td>
+                                    <td className="py-1.5 px-3 font-mono">
                                       AED {Number(line.credit || line.debit || 0).toLocaleString()}
                                     </td>
-                                    <td className="py-2 px-3 font-mono text-slate-600">
+                                    <td className="py-1.5 px-3 font-mono text-slate-600">
                                       AED {Number(line.tax || 0).toFixed(2)}
                                     </td>
-                                    <td className="py-2 px-3 font-mono font-bold text-slate-900 text-right">
+                                    <td className="py-1.5 px-3 font-mono font-bold text-slate-900 text-right">
                                       AED {total}
                                     </td>
                                   </tr>
@@ -897,6 +1138,171 @@ export const BillingPage: React.FC = () => {
           </>
         )}
       </div>
+
+      {/* Email Dispatch Modal (Genesys Cloud Integration) */}
+      {isEmailModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-3 select-none animate-fade-in">
+          <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden flex flex-col">
+            {/* Modal Header */}
+            <div className="px-4 py-3 bg-gradient-to-r from-blue-700 to-indigo-800 text-white flex items-center justify-between shadow-xs">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-white">
+                  <Mail className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm tracking-tight">Send Document via Genesys Cloud</h3>
+                  <p className="text-[10px] text-blue-100">Speed Auto Systems & Genesys Cloud Email Integration</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsEmailModalOpen(false)}
+                className="text-blue-200 hover:text-white p-1 rounded transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-4 space-y-3 text-xs">
+              <div>
+                <label className="font-bold text-slate-700 block mb-1 text-[11px]">Select Document Type to Email:</label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEmailDocType('voucher')}
+                    className={`p-2 rounded-lg border text-left cursor-pointer transition-all ${
+                      emailDocType === 'voucher'
+                        ? 'border-blue-600 bg-blue-50/70 ring-2 ring-blue-500/20 font-bold text-blue-900 shadow-2xs'
+                        : 'border-slate-200 hover:bg-slate-50 text-slate-700'
+                    }`}
+                  >
+                    <Receipt className="w-3.5 h-3.5 mb-1 text-blue-600" />
+                    <span className="block text-[11px]">Payment Receipt</span>
+                    <span className="text-[9px] text-slate-400 font-normal">Voucher receipt</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setEmailDocType('invoice')}
+                    className={`p-2 rounded-lg border text-left cursor-pointer transition-all ${
+                      emailDocType === 'invoice'
+                        ? 'border-blue-600 bg-blue-50/70 ring-2 ring-blue-500/20 font-bold text-blue-900 shadow-2xs'
+                        : 'border-slate-200 hover:bg-slate-50 text-slate-700'
+                    }`}
+                  >
+                    <FileText className="w-3.5 h-3.5 mb-1 text-blue-600" />
+                    <span className="block text-[11px]">Tax Invoice</span>
+                    <span className="text-[9px] text-slate-400 font-normal">Amount charged</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setEmailDocType('soa')}
+                    className={`p-2 rounded-lg border text-left cursor-pointer transition-all ${
+                      emailDocType === 'soa'
+                        ? 'border-blue-600 bg-blue-50/70 ring-2 ring-blue-500/20 font-bold text-blue-900 shadow-2xs'
+                        : 'border-slate-200 hover:bg-slate-50 text-slate-700'
+                    }`}
+                  >
+                    <Layers className="w-3.5 h-3.5 mb-1 text-blue-600" />
+                    <span className="block text-[11px]">Consolidated SOA</span>
+                    <span className="text-[9px] text-slate-400 font-normal">All transactions</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="font-bold text-slate-700 block mb-0.5 text-[10px]">Recipient Customer Email:</label>
+                  <input
+                    type="email"
+                    value={emailRecipient}
+                    onChange={(e) => setEmailRecipient(e.target.value)}
+                    className="w-full px-2 py-1 bg-white border border-slate-300 rounded text-xs text-slate-800 font-medium focus:ring-1 focus:ring-blue-500"
+                    placeholder="customer@email.com"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-slate-700 block mb-0.5 text-[10px]">Document Reference #:</label>
+                  <input
+                    type="text"
+                    value={emailSelectedRef}
+                    onChange={(e) => setEmailSelectedRef(e.target.value)}
+                    className="w-full px-2 py-1 bg-slate-50 border border-slate-300 rounded text-xs text-slate-800 font-mono font-bold"
+                    placeholder="Reference #"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-700 block mb-0.5 text-[10px]">Delivery Channel & Service:</label>
+                <div className="p-2 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-between">
+                  <div className="flex items-center space-x-1.5 text-slate-700">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                    <span className="font-semibold text-[11px]">Genesys Cloud Agent Workspace — Email Interaction</span>
+                  </div>
+                  <span className="text-[9px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded">
+                    Direct Trigger
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-700 block mb-0.5 text-[10px]">Email Subject Preview:</label>
+                <div className="px-2 py-1 bg-slate-50 rounded border border-slate-200 text-slate-700 font-mono text-[10px]">
+                  Budget Rent a Car UAE —{' '}
+                  {emailDocType === 'voucher'
+                    ? `Payment Receipt Voucher #${emailSelectedRef}`
+                    : emailDocType === 'invoice'
+                    ? `Official Tax Invoice #${emailSelectedRef}`
+                    : `Consolidated Statement of Account (SOA) - Ref ${emailSelectedRef}`}
+                </div>
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-700 block mb-0.5 text-[10px]">Agent Notes / Additional Message:</label>
+                <textarea
+                  rows={2}
+                  value={emailNotes}
+                  onChange={(e) => setEmailNotes(e.target.value)}
+                  placeholder="Dear Valued Customer, please find attached your requested billing document from Budget Rent a Car UAE..."
+                  className="w-full px-2 py-1 bg-white border border-slate-300 rounded text-[11px] text-slate-700 focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-4 py-2.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs">
+              <button
+                type="button"
+                onClick={() => setIsEmailModalOpen(false)}
+                className="px-3 py-1 bg-white border border-slate-300 hover:bg-slate-50 rounded font-semibold text-slate-700 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDispatchEmail}
+                disabled={isSendingEmail || !emailRecipient}
+                className="px-3.5 py-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded font-semibold flex items-center space-x-1.5 cursor-pointer shadow-xs"
+              >
+                {isSendingEmail ? (
+                  <>
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    <span>Sending via Genesys...</span>
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-3 h-3" />
+                    <span>Send via Genesys Cloud</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Lower Area: Customer Communication Dock */}
       {/*
