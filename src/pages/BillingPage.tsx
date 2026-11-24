@@ -4,6 +4,7 @@ import {
   CreditCard,
   AlertTriangle,
   ExternalLink,
+  Download,
   Clock,
   CheckCircle2,
   Link as LinkIcon,
@@ -121,18 +122,35 @@ export const BillingPage: React.FC = () => {
     setLowerTab(targetTab);
   };
 
-  // Agreement Date-Based and Search Filtering
+  // Agreement Date-Based and Search Filtering (with pre-filled Customer ID)
+  const [agreementCustomerId, setAgreementCustomerId] = useState<string>(() => {
+    return customer.id && customer.id !== '—' ? customer.id : '';
+  });
   const [agreementFromDate, setAgreementFromDate] = useState<string>('');
   const [agreementToDate, setAgreementToDate] = useState<string>('');
   const [agreementStatusFilter, setAgreementStatusFilter] = useState<string>('all');
   const [agreementSearchQuery, setAgreementSearchQuery] = useState<string>('');
 
-  // Filter Agreements based on Date Range, Status & Search Query
+  // Grab customer ID initially from customerDetail when it loads, while allowing manual edits
+  useEffect(() => {
+    if (customer.id && customer.id !== '—' && !agreementCustomerId) {
+      setAgreementCustomerId(customer.id);
+    }
+  }, [customer.id]);
+
+  // Filter Agreements based on Date Range, Status, Customer ID & Search Query
   const filteredAgreements = useMemo(() => {
     const source = agreementResults.length > 0 ? agreementResults : (bookingResults as any);
     return source.filter((b: any) => {
       const bNo = (b.agreementNo || b.bookingNo || `AGR-${b.id}`).toLowerCase();
       const plate = ((b as any).vehicle?.plateNo || (b as any).plateNo || '').toLowerCase();
+
+      // Customer ID filter
+      if (agreementCustomerId.trim()) {
+        const qCust = agreementCustomerId.trim();
+        const itemCust = String(b.customerId || b.customer?.id || '');
+        if (itemCust && itemCust !== qCust) return false;
+      }
 
       // Text search
       if (agreementSearchQuery.trim()) {
@@ -159,7 +177,15 @@ export const BillingPage: React.FC = () => {
 
       return true;
     });
-  }, [agreementResults, bookingResults, agreementSearchQuery, agreementStatusFilter, agreementFromDate, agreementToDate]);
+  }, [
+    agreementResults,
+    bookingResults,
+    agreementCustomerId,
+    agreementSearchQuery,
+    agreementStatusFilter,
+    agreementFromDate,
+    agreementToDate,
+  ]);
 
   // Filter Bookings from top navbar search
   const filteredBookings = useMemo(() => {
@@ -218,16 +244,15 @@ export const BillingPage: React.FC = () => {
   };
 
   const handleApplyApiDateFilter = async () => {
-    const custId =
-      customer.id && customer.id !== '—'
-        ? parseInt(String(customer.id).replace(/\D/g, ''), 10)
-        : undefined;
+    const cleanIdStr = agreementCustomerId.trim();
+    const custId = cleanIdStr ? parseInt(cleanIdStr.replace(/\D/g, ''), 10) || undefined : undefined;
     const res = await executeAgreementFilter({
       customerId: custId,
       fromDate: agreementFromDate ? `${agreementFromDate}T00:00:00` : undefined,
       toDate: agreementToDate ? `${agreementToDate}T23:59:59` : undefined,
       status: agreementStatusFilter !== 'all' ? agreementStatusFilter : undefined,
       agreementNo: agreementSearchQuery.trim() || undefined,
+      forceRefresh: true,
     });
     showFeedback(res.message);
   };
@@ -457,14 +482,19 @@ export const BillingPage: React.FC = () => {
               </button>
               <button
                 type="button"
-                disabled={lowerTab !== 'invoice_lines'}
-                onClick={() => lowerTab === 'invoice_lines'}
+                disabled={!selectedAgreementNo}
+                onClick={async () => {
+                  if (billingSummary.invoiceNo && selectedInvoiceLines.length === 0) {
+                    await fetchInvoiceDetails(billingSummary.invoiceNo);
+                  }
+                  setLowerTab('invoice_lines');
+                }}
                 className={`px-2 py-0.5 rounded font-semibold flex items-center space-x-1 transition-all ${
-                  lowerTab !== 'invoice_lines'
-                    ? 'bg-slate-50 border border-slate-200 text-slate-400 opacity-60 cursor-default'
-                    : 'bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 cursor-pointer'
+                  !selectedAgreementNo
+                    ? 'bg-slate-50 border border-slate-200 text-slate-400 opacity-60 cursor-not-allowed'
+                    : 'bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 cursor-pointer shadow-2xs'
                 }`}
-                title={lowerTab !== 'invoice_lines' ? 'Open invoice from Vouchers table to view' : 'Viewing invoice charges'}
+                title="View itemized invoice lines & charges"
               >
                 <FileText className="w-2.5 h-2.5 text-slate-500" />
                 <span>View Invoice</span>
@@ -684,19 +714,6 @@ export const BillingPage: React.FC = () => {
                                           <AlertTriangle className="w-2.5 h-2.5 text-amber-600" />
                                           <span>Accidents</span>
                                         </button>
-                                        {linkedAgrNo ? (
-                                          <button
-                                            type="button"
-                                            onClick={() => handleSelectAgreement(linkedAgrNo, b.customer?.id || (b as any).customerId, 'vouchers')}
-                                            className="px-2 py-0.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-[10px] font-semibold flex items-center space-x-1 transition-colors cursor-pointer shadow-2xs"
-                                            title={`Open Agreement ${linkedAgrNo} in Billing Flow`}
-                                          >
-                                            <span>Billing Flow</span>
-                                            <ArrowRight className="w-2.5 h-2.5" />
-                                          </button>
-                                        ) : (
-                                          <span className="text-[10px] text-slate-400 italic">No agreement</span>
-                                        )}
                                       </div>
                                     </td>
                                   </tr>
@@ -814,19 +831,26 @@ export const BillingPage: React.FC = () => {
 
                     {/* Item 3: Invoices (Amounts Charged) */}
                     <div
-                      onClick={() => lowerTab === 'invoice_lines'}
+                      onClick={async () => {
+                        if (selectedAgreementNo) {
+                          if (billingSummary.invoiceNo && selectedInvoiceLines.length === 0) {
+                            await fetchInvoiceDetails(billingSummary.invoiceNo);
+                          }
+                          setLowerTab('invoice_lines');
+                        }
+                      }}
                       className={`flex items-center space-x-2.5 select-none transition-all ${
-                        lowerTab !== 'invoice_lines'
-                          ? 'opacity-40 cursor-default'
-                          : 'opacity-100 cursor-pointer'
+                        !selectedAgreementNo
+                          ? 'opacity-40 cursor-not-allowed'
+                          : 'opacity-100 cursor-pointer hover:opacity-90'
                       }`}
-                      title={lowerTab !== 'invoice_lines' ? 'Click View Invoice Charges on a voucher to view invoice' : undefined}
+                      title={!selectedAgreementNo ? 'Select an agreement first to view invoice charges' : 'Click to view itemized invoice charges'}
                     >
                       <div
                         className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs shrink-0 transition-all ${
-                          lowerTab !== 'invoice_lines'
-                            ? 'bg-slate-100 text-slate-400 border border-slate-200'
-                            : 'bg-blue-600 text-white shadow-xs ring-2 ring-blue-100'
+                          lowerTab === 'invoice_lines'
+                            ? 'bg-blue-600 text-white shadow-xs ring-2 ring-blue-100'
+                            : 'bg-slate-100 text-slate-600 border border-slate-200'
                         }`}
                       >
                         3
@@ -834,19 +858,19 @@ export const BillingPage: React.FC = () => {
                       <div className="text-left">
                         <div className="flex items-center space-x-1.5">
                           <span className={`text-xs font-bold leading-tight ${
-                            lowerTab === 'invoice_lines' ? 'text-blue-600' : 'text-slate-400'
+                            lowerTab === 'invoice_lines' ? 'text-blue-600 font-bold' : 'text-slate-700'
                           }`}>
                             Invoices (Amounts Charged)
                           </span>
-                          {selectedAgreementNo && lowerTab === 'invoice_lines' && (
+                          {selectedAgreementNo && (
                             <span className="text-[10px] bg-emerald-50 text-emerald-700 px-1.5 py-0.2 rounded-full font-mono font-medium">
-                              {selectedInvoiceLines.length}
+                              {selectedInvoiceLines.length > 0 ? selectedInvoiceLines.length : '1'}
                             </span>
                           )}
                         </div>
-                        {/* <p className="text-[10px] text-slate-500 leading-tight mt-0.5">
+                        <p className="text-[10px] text-slate-500 leading-tight mt-0.5">
                           Itemized lines &amp; charges
-                        </p> */}
+                        </p>
                       </div>
                     </div>
 
@@ -863,6 +887,18 @@ export const BillingPage: React.FC = () => {
                           <Filter className="w-3 h-3 text-blue-600" />
                           <span>Filter Agreements:</span>
                         </span>
+
+                        <div className="flex items-center space-x-1">
+                          <span className="text-slate-500 font-medium">Customer ID:</span>
+                          <input
+                            type="text"
+                            value={agreementCustomerId}
+                            onChange={(e) => setAgreementCustomerId(e.target.value)}
+                            placeholder="e.g. 103278"
+                            className="px-1.5 py-0.5 bg-white border border-slate-300 rounded text-[10px] text-slate-700 font-mono focus:ring-1 focus:ring-blue-500 w-20"
+                            title="Filter by Speed Auto ERP Customer ID (pre-filled from Customer Details, editable)"
+                          />
+                        </div>
 
                         <div className="flex items-center space-x-1">
                           <span className="text-slate-500 font-medium">From:</span>
@@ -926,10 +962,11 @@ export const BillingPage: React.FC = () => {
                             <option value={50}>50 / page</option>
                           </select>
                         </div>
-                        {(agreementFromDate || agreementToDate || agreementStatusFilter !== 'all' || agreementSearchQuery) && (
+                        {(agreementCustomerId || agreementFromDate || agreementToDate || agreementStatusFilter !== 'all' || agreementSearchQuery) && (
                           <button
                             type="button"
                             onClick={() => {
+                              setAgreementCustomerId(customer.id && customer.id !== '—' ? customer.id : '');
                               setAgreementFromDate('');
                               setAgreementToDate('');
                               setAgreementStatusFilter('all');
@@ -1046,7 +1083,7 @@ export const BillingPage: React.FC = () => {
                                           }}
                                           className="px-2.5 py-0.5 rounded text-[10px] font-semibold flex items-center space-x-1 transition-colors cursor-pointer bg-blue-600 hover:bg-blue-700 text-white shadow-2xs"
                                         >
-                                          <span>Select Agreement</span>
+                                          <span>View Vouchers</span>
                                           <ArrowRight className="w-2.5 h-2.5" />
                                         </button>
                                       </div>
@@ -1251,22 +1288,26 @@ export const BillingPage: React.FC = () => {
                                             href={v.url}
                                             target="_blank"
                                             rel="noopener noreferrer"
-                                            className="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded text-[9px] font-semibold flex items-center space-x-0.5 transition-colors cursor-pointer"
+                                            download
+                                            className="px-2 py-0.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-[9px] font-semibold flex items-center space-x-1 transition-colors cursor-pointer shadow-2xs"
+                                            title="Download Report"
                                           >
                                             <span>Report</span>
-                                            <ExternalLink className="w-2.5 h-2.5" />
+                                            <Download className="w-2.5 h-2.5" />
                                           </a>
                                         )}
-                                        {isInvoice && (
-                                          <button
-                                            type="button"
-                                            onClick={() => setLowerTab('invoice_lines')}
-                                            className="px-2 py-0.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-[10px] font-semibold flex items-center space-x-1 transition-colors cursor-pointer"
-                                          >
-                                            <span>View Invoice Charges</span>
-                                            <ArrowRight className="w-2.5 h-2.5" />
-                                          </button>
-                                        )}
+                                        <button
+                                          type="button"
+                                          onClick={async () => {
+                                            await fetchInvoiceDetails(v.voucherNo);
+                                            setLowerTab('invoice_lines');
+                                          }}
+                                          className="px-2 py-0.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-[9px] font-semibold flex items-center space-x-1 transition-colors cursor-pointer shadow-2xs"
+                                          title={`View invoice breakdown for voucher ${v.voucherNo}`}
+                                        >
+                                          <span>View Invoice Charges</span>
+                                          <ArrowRight className="w-2.5 h-2.5" />
+                                        </button>
                                       </div>
                                     </td>
                                   </tr>
@@ -1275,7 +1316,7 @@ export const BillingPage: React.FC = () => {
                             ) : (
                               <tr>
                                   <td colSpan={7} className="py-8 text-center text-slate-400 text-xs">
-                                    No payment vouchers recorded for agreement {selectedAgreementNo || billingSummary.agreementNo || displayedRental.agreementNo}. Click &quot;Select Agreement&quot; on any agreement in All Agreements.
+                                    No payment vouchers recorded for agreement {selectedAgreementNo || billingSummary.agreementNo || displayedRental.agreementNo}. Click &quot;View Vouchers&quot; on any agreement in All Agreements.
                                   </td>
                               </tr>
                             )}

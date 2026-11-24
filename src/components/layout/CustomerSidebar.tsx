@@ -97,6 +97,23 @@ export const CustomerSidebar: React.FC = () => {
 
   const docsCount = customer.identityDocuments?.length ?? 0;
 
+  const rawMobile = customer.mobile || '';
+  const rawEmail = customer.email || '';
+
+  const displayMobile =
+    rawMobile && !rawMobile.includes('@')
+      ? rawMobile
+      : rawEmail && !rawEmail.includes('@') && /^\+?[\d\s-]{6,}$/.test(rawEmail.trim())
+      ? rawEmail
+      : '—';
+
+  const displayEmail =
+    rawEmail && rawEmail.includes('@')
+      ? rawEmail
+      : rawMobile && rawMobile.includes('@')
+      ? rawMobile
+      : '—';
+
   return (
     <aside className="w-56 xl:w-60 bg-white border-r border-slate-200 flex flex-col justify-start shrink-0 select-none overflow-hidden transition-all duration-200 ease-in-out z-10">
       <div className="p-2.5 space-y-1.5 w-56 xl:w-60">
@@ -164,8 +181,8 @@ export const CustomerSidebar: React.FC = () => {
 
           <div className="flex justify-between items-baseline py-0.5 border-b border-slate-50">
             <span className="text-slate-400">Mobile</span>
-            <span className="font-semibold text-slate-800 font-mono truncate max-w-[130px]" title={customer.mobile}>
-              {customer.mobile || '—'}
+            <span className="font-semibold text-slate-800 font-mono truncate max-w-[130px]" title={displayMobile}>
+              {displayMobile}
             </span>
           </div>
 
@@ -173,9 +190,9 @@ export const CustomerSidebar: React.FC = () => {
             <span className="text-slate-400">Email</span>
             <span
               className="font-medium text-slate-800 truncate max-w-[135px]"
-              title={customer.email}
+              title={displayEmail}
             >
-              {customer.email || '—'}
+              {displayEmail}
             </span>
           </div>
 

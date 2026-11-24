@@ -26,7 +26,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { useWorkspace } from '../../context/WorkspaceContext';
-import { BookingTransactionPayload, ChargeSettingItem, LocationItem } from '../../services/apiService';
+import { apiService, BookingTransactionPayload, ChargeSettingItem, LocationItem } from '../../services/apiService';
 
 // Controlled Branch Dropdown with fixed max-height (Never spills over the modal)
 interface BranchDropdownProps {
@@ -189,7 +189,10 @@ export const CreateBookingModal: React.FC = () => {
   } = useWorkspace();
 
   // Active step / tab - 2 clean steps matching the Postman CreateBooking API
-  const [activeTab, setActiveTab] = useState<'schedule' | 'charges'>('schedule');
+  type BookingTab = 'customer' | 'schedule' | 'charges';
+  const [activeTab, setActiveTab] = useState<BookingTab>('customer');
+  const [isFetchingCustomer, setIsFetchingCustomer] = useState<boolean>(false);
+  const [customerLookupQuery, setCustomerLookupQuery] = useState<string>('');
 
   // Loading state for locations API
   const [isLoadingLocations, setIsLoadingLocations] = useState<boolean>(false);
@@ -209,8 +212,11 @@ export const CreateBookingModal: React.FC = () => {
   };
 
   // Location & Schedule initialized from reservationQuote
-  const [locationId, setLocationId] = useState<number>(customer.locationId || 62);
-  const [closingLocationId, setClosingLocationId] = useState<number>(customer.locationId || 62);
+  const initialBranchId = reservationQuote.pickupLocationId || customer.locationId || 61;
+  const [locationId, setLocationId] = useState<number>(initialBranchId);
+  const [closingLocationId, setClosingLocationId] = useState<number>(
+    reservationQuote.returnLocationId || initialBranchId
+  );
   const [pickupAddress, setPickupAddress] = useState<string>(
     reservationQuote.pickupLocation && reservationQuote.pickupLocation !== '—'
       ? reservationQuote.pickupLocation
@@ -299,6 +305,38 @@ export const CreateBookingModal: React.FC = () => {
     customer.address?.state || customer.address?.city || 'United Arab Emirates'
   );
 
+  // On-demand customer fetch from Speed Auto ERP
+  const handleFetchCustomerFromApi = async (queryOverride?: string) => {
+    const q = (queryOverride || customerLookupQuery || email || mobileNo || '').trim();
+    if (!q) return;
+    setIsFetchingCustomer(true);
+    try {
+      const isMail = q.includes('@');
+      const res = await apiService.getCustomerDetail(isMail ? { email: q } : { mobileNo: q });
+      if (res.success && res.result) {
+        const c = res.result;
+        if (c.firstName) setFirstName(c.firstName);
+        if (c.lastName) setLastName(c.lastName);
+        if (c.email) setEmail(c.email);
+        if (c.mobileNo) setMobileNo(c.mobileNo);
+        if (c.nationality) setNationality(c.nationality);
+        if (c.dateOfBirth) setDateOfBirth(c.dateOfBirth.split('T')[0]);
+        if (c.gender) setGender(c.gender);
+        if (c.address) {
+          if (c.address.addressLine1) setAddressLine1(c.address.addressLine1);
+          if (c.address.city) setCity(c.address.city);
+          if (c.address.state) setState(c.address.state);
+          if (c.address.country) setCountry(c.address.country);
+          if (c.address.zipCode) setZipCode(c.address.zipCode);
+        }
+      }
+    } catch {
+      // Keep existing values
+    } finally {
+      setIsFetchingCustomer(false);
+    }
+  };
+
   // Submission State
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [resultMessage, setResultMessage] = useState<{ success: boolean; message: string; bookingNo?: string } | null>(null);
@@ -343,7 +381,11 @@ export const CreateBookingModal: React.FC = () => {
         setMobileNo('');
       }
 
-      if (customer.locationId) {
+      // Prioritize vehicle pickup branch from quote, fallback to customer location
+      if (reservationQuote.pickupLocationId) {
+        setLocationId(reservationQuote.pickupLocationId);
+        setClosingLocationId(reservationQuote.returnLocationId || reservationQuote.pickupLocationId);
+      } else if (customer.locationId) {
         setLocationId(customer.locationId);
         setClosingLocationId(customer.locationId);
       }
@@ -556,9 +598,24 @@ export const CreateBookingModal: React.FC = () => {
           </div>
         </div>
 
-        {/* Segmented Step Navigation - 2 Clean Steps */}
+        {/* Segmented Step Navigation - 3 Clean Steps */}
         <div className="px-4 py-1.5 bg-slate-50 border-b border-slate-200 flex items-center justify-between shrink-0">
           <div className="flex items-center space-x-1.5">
+            <button
+              type="button"
+              onClick={() => setActiveTab('customer')}
+              className={`px-3 py-1 rounded-md font-semibold text-xs flex items-center space-x-1.5 transition-all cursor-pointer ${
+                activeTab === 'customer'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'text-slate-600 hover:bg-slate-200/70'
+              }`}
+            >
+              <span className="w-3.5 h-3.5 rounded-full bg-black/20 text-[9px] flex items-center justify-center">1</span>
+              <span>Customer Details</span>
+            </button>
+
+            <ChevronRight className="w-3 h-3 text-slate-400" />
+
             <button
               type="button"
               onClick={() => setActiveTab('schedule')}
@@ -568,8 +625,8 @@ export const CreateBookingModal: React.FC = () => {
                   : 'text-slate-600 hover:bg-slate-200/70'
               }`}
             >
-              <span className="w-3.5 h-3.5 rounded-full bg-black/20 text-[9px] flex items-center justify-center">1</span>
-              <span>Vehicle & Schedule</span>
+              <span className="w-3.5 h-3.5 rounded-full bg-black/20 text-[9px] flex items-center justify-center">2</span>
+              <span>Vehicle &amp; Schedule</span>
             </button>
 
             <ChevronRight className="w-3 h-3 text-slate-400" />
@@ -583,7 +640,7 @@ export const CreateBookingModal: React.FC = () => {
                   : 'text-slate-600 hover:bg-slate-200/70'
               }`}
             >
-              <span className="w-3.5 h-3.5 rounded-full bg-black/20 text-[9px] flex items-center justify-center">2</span>
+              <span className="w-3.5 h-3.5 rounded-full bg-black/20 text-[9px] flex items-center justify-center">3</span>
               <span>Rental Charges</span>
             </button>
           </div>
@@ -622,7 +679,216 @@ export const CreateBookingModal: React.FC = () => {
               </div>
             )}
 
-            {/* TAB 1: Vehicle & Schedule */}
+            {/* TAB 1: Customer Details */}
+            {activeTab === 'customer' && (
+              <div className="space-y-3.5 animate-fade-in">
+                {/* ERP Lookup Toolbar */}
+                <div className="p-2.5 bg-gradient-to-r from-blue-50/80 via-slate-50 to-indigo-50/50 rounded-xl border border-blue-200/80 flex flex-wrap items-center justify-between gap-2 shadow-2xs">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-7 h-7 rounded-lg bg-blue-600/10 border border-blue-200 flex items-center justify-center text-blue-700 shrink-0">
+                      <User className="w-3.5 h-3.5" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-xs text-slate-900">Customer Profile (Speed Auto ERP)</h4>
+                      <p className="text-[10px] text-slate-500">Auto-filled from ERP. You can review or modify any field below.</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-1.5">
+                    <input
+                      type="text"
+                      placeholder="Lookup phone / email..."
+                      value={customerLookupQuery}
+                      onChange={(e) => setCustomerLookupQuery(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleFetchCustomerFromApi();
+                        }
+                      }}
+                      className="px-2 py-1 bg-white border border-slate-300 rounded text-xs text-slate-800 placeholder-slate-400 w-44 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleFetchCustomerFromApi()}
+                      disabled={isFetchingCustomer}
+                      className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded text-xs font-semibold flex items-center space-x-1 transition-colors cursor-pointer"
+                    >
+                      {isFetchingCustomer ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : (
+                        <Search className="w-3 h-3" />
+                      )}
+                      <span>{isFetchingCustomer ? 'Fetching...' : 'Fetch'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Primary Contact Information */}
+                <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-2xs space-y-2.5">
+                  <h5 className="font-bold text-xs text-slate-800 flex items-center space-x-1.5">
+                    <User className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Personal &amp; Contact Information</span>
+                  </h5>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wide mb-1">
+                        First Name <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={firstName}
+                        onChange={(e) => setFirstName(e.target.value)}
+                        placeholder="e.g. Rifaz"
+                        className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:bg-white focus:ring-2 focus:ring-blue-100 focus:border-blue-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wide mb-1">
+                        Last Name <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={lastName}
+                        onChange={(e) => setLastName(e.target.value)}
+                        placeholder="e.g. Tonse"
+                        className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:bg-white focus:ring-2 focus:ring-blue-100 focus:border-blue-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wide mb-1">
+                        Mobile Number <span className="text-rose-500">*</span>
+                      </label>
+                      <div className="relative">
+                        <Phone className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2 pointer-events-none" />
+                        <input
+                          type="tel"
+                          required
+                          value={mobileNo}
+                          onChange={(e) => setMobileNo(e.target.value)}
+                          placeholder="+971501234567"
+                          className="w-full pl-8 pr-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-mono font-bold text-slate-800 focus:bg-white focus:ring-2 focus:ring-blue-100 focus:border-blue-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wide mb-1">
+                        Email Address <span className="text-rose-500">*</span>
+                      </label>
+                      <div className="relative">
+                        <Mail className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2 pointer-events-none" />
+                        <input
+                          type="email"
+                          required
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          placeholder="client@example.com"
+                          className="w-full pl-8 pr-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-800 focus:bg-white focus:ring-2 focus:ring-blue-100 focus:border-blue-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wide mb-1">
+                        Nationality
+                      </label>
+                      <input
+                        type="text"
+                        value={nationality}
+                        onChange={(e) => setNationality(e.target.value)}
+                        placeholder="e.g. United Arab Emirates (UAE)"
+                        className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-800 focus:bg-white focus:ring-2 focus:ring-blue-100 focus:border-blue-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wide mb-1">
+                        Date of Birth
+                      </label>
+                      <input
+                        type="date"
+                        value={dateOfBirth}
+                        onChange={(e) => setDateOfBirth(e.target.value)}
+                        className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:bg-white focus:ring-2 focus:ring-blue-100 focus:border-blue-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wide mb-1">
+                        Gender
+                      </label>
+                      <select
+                        value={gender}
+                        onChange={(e) => setGender(Number(e.target.value))}
+                        className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:bg-white focus:ring-2 focus:ring-blue-100 focus:border-blue-500"
+                      >
+                        <option value={1}>Male</option>
+                        <option value={2}>Female</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Address Information */}
+                <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-2xs space-y-2.5">
+                  <h5 className="font-bold text-xs text-slate-800 flex items-center space-x-1.5">
+                    <MapPin className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Customer Address</span>
+                  </h5>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5">
+                    <div className="sm:col-span-2">
+                      <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wide mb-1">
+                        Street / Building Address
+                      </label>
+                      <input
+                        type="text"
+                        value={addressLine1}
+                        onChange={(e) => setAddressLine1(e.target.value)}
+                        placeholder="e.g. Sheikh Zayed Road, Al Quoz"
+                        className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-800 focus:bg-white focus:ring-2 focus:ring-blue-100 focus:border-blue-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wide mb-1">
+                        City / Emirate
+                      </label>
+                      <input
+                        type="text"
+                        value={city}
+                        onChange={(e) => setCity(e.target.value)}
+                        placeholder="Dubai"
+                        className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-800 focus:bg-white focus:ring-2 focus:ring-blue-100 focus:border-blue-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wide mb-1">
+                        Country
+                      </label>
+                      <input
+                        type="text"
+                        value={country}
+                        onChange={(e) => setCountry(e.target.value)}
+                        placeholder="United Arab Emirates (UAE)"
+                        className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-800 focus:bg-white focus:ring-2 focus:ring-blue-100 focus:border-blue-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 2: Vehicle & Schedule */}
             {activeTab === 'schedule' && (
               <div className="space-y-3 animate-fade-in">
                 {/* Booked Vehicle & Category Banner */}
@@ -744,34 +1010,7 @@ export const CreateBookingModal: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Flight Details (Optional for airport collections) */}
-                <div className="grid grid-cols-2 gap-3 p-2 bg-slate-50/60 rounded-xl border border-slate-200">
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wide mb-1">
-                      Flight Number (Optional)
-                    </label>
-                    <input
-                      type="text"
-                      value={flightNo}
-                      onChange={(e) => setFlightNo(e.target.value)}
-                      placeholder="e.g. EK 202, FZ 45"
-                      className="w-full px-2.5 py-1 bg-white border border-slate-300 rounded-lg text-xs text-slate-800 focus:ring-2 focus:ring-blue-100 font-mono"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wide mb-1">
-                      Airline (Optional)
-                    </label>
-                    <input
-                      type="text"
-                      value={airline}
-                      onChange={(e) => setAirline(e.target.value)}
-                      placeholder="e.g. Emirates, Flydubai"
-                      className="w-full px-2.5 py-1 bg-white border border-slate-300 rounded-lg text-xs text-slate-800 focus:ring-2 focus:ring-blue-100"
-                    />
-                  </div>
-                </div>
-
+             
                 {/* Notes & Payment Settlement */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
                   <div className="md:col-span-2">
@@ -786,7 +1025,7 @@ export const CreateBookingModal: React.FC = () => {
                       className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-800 focus:bg-white focus:ring-2 focus:ring-blue-100"
                     />
                   </div>
-                  <div className="pb-1.5">
+                  {/* <div className="pb-1.5">
                     <label className="flex items-center space-x-2 cursor-pointer text-slate-700 font-medium text-xs bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 transition-colors">
                       <input
                         type="checkbox"
@@ -796,7 +1035,7 @@ export const CreateBookingModal: React.FC = () => {
                       />
                       <span>Skip Gateway Payment</span>
                     </label>
-                  </div>
+                  </div> */}
                 </div>
               </div>
             )}
@@ -810,7 +1049,7 @@ export const CreateBookingModal: React.FC = () => {
                     <label className="block text-[11px] font-bold text-slate-700 mb-1">Base Rate / Day (AED)</label>
                     <input
                       type="number"
-                      step="1"
+                      step="any"
                       min="0"
                       value={dailyRate}
                       onChange={(e) => setDailyRate(e.target.value)}
@@ -831,7 +1070,7 @@ export const CreateBookingModal: React.FC = () => {
                     <label className="block text-[11px] font-bold text-slate-700 mb-1">Discount (%)</label>
                     <input
                       type="number"
-                      step="0.5"
+                      step="any"
                       min="0"
                       max="100"
                       placeholder="0"
@@ -875,7 +1114,7 @@ export const CreateBookingModal: React.FC = () => {
                               type="number"
                               min="0"
                               max="100"
-                              step="0.5"
+                              step="any"
                               placeholder="0"
                               value={discountPercent}
                               onChange={(e) => setDiscountPercent(e.target.value)}
@@ -924,16 +1163,39 @@ export const CreateBookingModal: React.FC = () => {
           <div className="px-4 py-2.5 border-t border-slate-200 bg-slate-50/80 flex items-center justify-between shrink-0">
             {/* Step navigation shortcuts */}
             <div className="flex items-center space-x-1.5">
-              {activeTab === 'schedule' ? (
+              {activeTab === 'customer' && (
                 <button
                   type="button"
-                  onClick={() => setActiveTab('charges')}
-                  className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg text-xs flex items-center space-x-1 cursor-pointer transition-colors"
+                  onClick={() => setActiveTab('schedule')}
+                  className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg text-xs flex items-center space-x-1.5 cursor-pointer transition-colors shadow-2xs"
                 >
-                  <span>Next: Rental Charges</span>
+                  <span>Next: Vehicle &amp; Schedule</span>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </button>
-              ) : (
+              )}
+
+              {activeTab === 'schedule' && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('customer')}
+                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg text-xs flex items-center space-x-1 cursor-pointer transition-colors"
+                  >
+                    <ArrowLeft className="w-3.5 h-3.5" />
+                    <span>Back to Customer</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('charges')}
+                    className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg text-xs flex items-center space-x-1.5 cursor-pointer transition-colors shadow-2xs"
+                  >
+                    <span>Next: Rental Charges</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </>
+              )}
+
+              {activeTab === 'charges' && (
                 <button
                   type="button"
                   onClick={() => setActiveTab('schedule')}
@@ -945,7 +1207,7 @@ export const CreateBookingModal: React.FC = () => {
               )}
             </div>
 
-            {/* Main Action Buttons */}
+            {/* Main Action Buttons: Create Booking ONLY on the LAST step ('charges') */}
             <div className="flex items-center space-x-2">
               <button
                 type="button"
@@ -954,23 +1216,26 @@ export const CreateBookingModal: React.FC = () => {
               >
                 Cancel
               </button>
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-bold rounded-lg text-xs shadow-xs flex items-center space-x-1.5 cursor-pointer transition-all"
-              >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    <span>Loading...</span>
-                  </>
-                ) : (
-                  <>
-                    <Calendar className="w-3.5 h-3.5" />
-                    <span>Create Booking</span>
-                  </>
-                )}
-              </button>
+
+              {activeTab === 'charges' && (
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-bold rounded-lg text-xs shadow-xs flex items-center space-x-1.5 cursor-pointer transition-all"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Loading...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Calendar className="w-3.5 h-3.5" />
+                      <span>Create Booking</span>
+                    </>
+                  )}
+                </button>
+              )}
             </div>
           </div>
         </form>

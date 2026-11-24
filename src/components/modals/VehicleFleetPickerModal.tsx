@@ -43,6 +43,7 @@ export const VehicleFleetPickerModal: React.FC = () => {
   const [selectedGroupId, setSelectedGroupId] = useState<number | 'all'>('all');
   const [vehicles, setVehicles] = useState<VehicleItem[]>([]);
   const [loadingVehicles, setLoadingVehicles] = useState(false);
+  const [backgroundLoadingText, setBackgroundLoadingText] = useState<string | null>(null);
   const [availableLocations, setAvailableLocations] = useState<LocationItem[]>(locations || []);
 
   // --- 7 Additional Search Filters ---
@@ -107,7 +108,53 @@ export const VehicleFleetPickerModal: React.FC = () => {
   const vehicleCacheRef = useRef<Map<string | number, VehicleItem[]>>(new Map());
   const isFetchingRef = useRef<boolean>(false);
 
-  // Fetch Fleet Vehicles for selected group or primary fleet (EXACTLY ONE API call)
+  // Helper to fetch all pages for a single vehicle group
+  const fetchGroupVehicles = async (
+    groupId: number,
+    onFirstPage?: (items: VehicleItem[]) => void,
+    onProgress?: (loaded: number, total: number) => void
+  ): Promise<VehicleItem[]> => {
+    try {
+      const p1 = await apiService.getVehicles({ vehicleGroupId: groupId, pageNumber: 1, pageSize: 50 });
+      if (!p1.success || !p1.result?.items || p1.result.items.length === 0) {
+        return [];
+      }
+
+      const firstPage = p1.result.items;
+      if (onFirstPage) onFirstPage(firstPage);
+
+      const totalCount = p1.result.totalCount || firstPage.length;
+      const pageSize = firstPage.length || 10;
+      const totalPages = Math.min(Math.ceil(totalCount / pageSize), 15);
+
+      if (onProgress) onProgress(firstPage.length, totalCount);
+      if (totalPages <= 1) return firstPage;
+
+      // Parallel batching for remaining pages
+      const remaining: number[] = [];
+      for (let p = 2; p <= totalPages; p++) remaining.push(p);
+
+      const all = [...firstPage];
+      const batchSize = 4;
+      for (let i = 0; i < remaining.length; i += batchSize) {
+        const batch = remaining.slice(i, i + batchSize);
+        const batchRes = await Promise.all(
+          batch.map((p) => apiService.getVehicles({ vehicleGroupId: groupId, pageNumber: p, pageSize: 50 }))
+        );
+        batchRes.forEach((res) => {
+          if (res.success && res.result?.items) {
+            all.push(...res.result.items);
+          }
+        });
+        if (onProgress) onProgress(Math.min(all.length, totalCount), totalCount);
+      }
+      return all;
+    } catch {
+      return [];
+    }
+  };
+
+  // Main fetch function handling single group or 'all' groups
   const fetchFleetVehicles = async (
     groupId: number | 'all',
     currentGroups?: VehicleGroupItem[],
@@ -122,28 +169,112 @@ export const VehicleFleetPickerModal: React.FC = () => {
     if (isFetchingRef.current) return;
     isFetchingRef.current = true;
     setLoadingVehicles(true);
+    setBackgroundLoadingText(null);
 
     try {
       const grps = currentGroups && currentGroups.length > 0 ? currentGroups : vehicleGroups;
-      // When 'all' is selected, query the primary fleet group (group 31 or first available group)
-      const targetGid =
-        groupId === 'all'
-          ? (grps.find((g) => g.id === 31)?.id || grps[0]?.id || 31)
-          : Number(groupId);
 
-      // EXACTLY ONE API call
-      const res = await apiService.getVehicles({ vehicleGroupId: targetGid, pageNumber: 1 });
-      if (res.success && res.result?.items && res.result.items.length > 0) {
-        vehicleCacheRef.current.set(groupId, res.result.items);
-        setVehicles(res.result.items);
+      if (groupId === 'all') {
+        // Query vehicles across all available groups
+        setBackgroundLoadingText('Discovering fleet across all groups...');
+        const targetGroups = grps.length > 0 ? grps : [{ id: 31, name: 'K' } as any];
+
+        // Fetch Page 1 for all groups in parallel batches of 5
+        const initialCombined: VehicleItem[] = [];
+        const secondaryGroupJobs: { groupId: number; totalCount: number; pageSize: number }[] = [];
+
+        const groupBatchSize = 5;
+        for (let i = 0; i < targetGroups.length; i += groupBatchSize) {
+          const batch = targetGroups.slice(i, i + groupBatchSize);
+          const results = await Promise.all(
+            batch.map((g) => apiService.getVehicles({ vehicleGroupId: g.id, pageNumber: 1, pageSize: 50 }))
+          );
+
+          results.forEach((gres, idx) => {
+            if (gres.success && gres.result?.items && gres.result.items.length > 0) {
+              initialCombined.push(...gres.result.items);
+              const gObj = batch[idx];
+              const total = gres.result.totalCount || gres.result.items.length;
+              const pSize = gres.result.items.length || 10;
+              if (total > pSize) {
+                secondaryGroupJobs.push({ groupId: gObj.id, totalCount: total, pageSize: pSize });
+              }
+            }
+          });
+
+          // Show initial items immediately
+          setVehicles([...initialCombined]);
+          setLoadingVehicles(false);
+        }
+
+        // Fetch secondary pages for groups that had more records
+        if (secondaryGroupJobs.length > 0) {
+          setBackgroundLoadingText(`Loading full inventory across ${targetGroups.length} groups...`);
+          const allSecondaryPageRequests: Promise<any>[] = [];
+          secondaryGroupJobs.forEach((job) => {
+            const pages = Math.min(Math.ceil(job.totalCount / job.pageSize), 10);
+            for (let p = 2; p <= pages; p++) {
+              allSecondaryPageRequests.push(apiService.getVehicles({ vehicleGroupId: job.groupId, pageNumber: p, pageSize: 50 }));
+            }
+          });
+
+          // Batch secondary requests in chunks of 4
+          for (let i = 0; i < allSecondaryPageRequests.length; i += 4) {
+            const batch = allSecondaryPageRequests.slice(i, i + 4);
+            const batchResults = await Promise.all(batch);
+            batchResults.forEach((sres) => {
+              if (sres.success && sres.result?.items) {
+                initialCombined.push(...sres.result.items);
+              }
+            });
+          }
+        }
+
+        // Deduplicate
+        const unique = new Map<string, VehicleItem>();
+        initialCombined.forEach((v) => {
+          const key = String(v.id || v.plateNo || v.chassisNo || Math.random());
+          unique.set(key, v);
+        });
+        const finalAll = Array.from(unique.values());
+        vehicleCacheRef.current.set('all', finalAll);
+        setVehicles(finalAll);
       } else {
-        setVehicles([]);
+        // Query specific group with auto-pagination
+        const targetGid = Number(groupId);
+        const groupName = grps.find((g) => g.id === targetGid)?.name || `Group ${targetGid}`;
+
+        const allItems = await fetchGroupVehicles(
+          targetGid,
+          (p1) => {
+            setVehicles(p1);
+            setLoadingVehicles(false);
+          },
+          (loaded, total) => {
+            if (total > loaded) {
+              setBackgroundLoadingText(`Loading full ${groupName} fleet (${loaded} of ${total} vehicles)... `);
+            } else {
+              setBackgroundLoadingText(null);
+            }
+          }
+        );
+
+        // Deduplicate
+        const unique = new Map<string, VehicleItem>();
+        allItems.forEach((v) => {
+          const key = String(v.id || v.plateNo || v.chassisNo || Math.random());
+          unique.set(key, v);
+        });
+        const finalGroup = Array.from(unique.values());
+        vehicleCacheRef.current.set(groupId, finalGroup);
+        setVehicles(finalGroup);
       }
     } catch {
-      setVehicles([]);
+      // Retain current vehicles on network error
     } finally {
       isFetchingRef.current = false;
       setLoadingVehicles(false);
+      setBackgroundLoadingText(null);
     }
   };
 
@@ -175,20 +306,31 @@ export const VehicleFleetPickerModal: React.FC = () => {
     }
   }, [isFleetPickerOpen]);
 
-  // Derived list of unique branches from vehicles + reference locations
+  // Derived list of unique branches from vehicles + reference locations from GetLocations API
   const allBranches = useMemo(() => {
-    const map = new Map<string, string>();
-    // Add reference locations
+    const map = new Map<string, { id: string; name: string; label: string }>();
+
+    // 1. Add reference locations from GetLocations API (active branches)
     availableLocations.forEach((loc) => {
-      map.set(String(loc.id), loc.name);
+      if (loc.inActive) return; // filter out closed/inactive branches
+      const cityPart = loc.city ? ` • ${loc.city}` : '';
+      const codePart = loc.code ? ` (${loc.code})` : '';
+      const label = `${loc.name}${codePart}${cityPart}`;
+      map.set(String(loc.id), { id: String(loc.id), name: loc.name, label });
     });
-    // Add any extra location from current vehicles
+
+    // 2. Add any extra location discovered from current vehicles
     vehicles.forEach((v) => {
-      if (v.locationId && v.locationName) {
-        map.set(String(v.locationId), v.locationName);
+      if (v.locationId && v.locationName && !map.has(String(v.locationId))) {
+        map.set(String(v.locationId), {
+          id: String(v.locationId),
+          name: v.locationName,
+          label: v.locationName,
+        });
       }
     });
-    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+
+    return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label));
   }, [availableLocations, vehicles]);
 
   // Count active filters
@@ -223,7 +365,11 @@ export const VehicleFleetPickerModal: React.FC = () => {
       // 1. Branch Filter
       if (filterBranch !== 'all') {
         const matchesId = v.locationId && String(v.locationId) === filterBranch;
-        const matchesName = v.locationName && v.locationName.toLowerCase() === filterBranch.toLowerCase();
+        const selectedBranchObj = allBranches.find((b) => b.id === filterBranch);
+        const matchesName =
+          v.locationName &&
+          (v.locationName.toLowerCase() === filterBranch.toLowerCase() ||
+            (selectedBranchObj && selectedBranchObj.name.toLowerCase() === v.locationName.toLowerCase()));
         if (!matchesId && !matchesName) return false;
       }
 
@@ -314,12 +460,36 @@ export const VehicleFleetPickerModal: React.FC = () => {
         ? `Group ${veh.vehicleGroupName}`
         : matchedGroup?.description || matchedGroup?.name || 'Fleet';
 
+    // Resolve location ID: from veh.locationId, matched location by name, or filterBranch
+    let resolvedLocationId = veh.locationId;
+    if (!resolvedLocationId && veh.locationName) {
+      const matchedLoc = availableLocations.find(
+        (l) => l.name.toLowerCase() === veh.locationName?.toLowerCase()
+      );
+      if (matchedLoc) resolvedLocationId = matchedLoc.id;
+    }
+    if (!resolvedLocationId && filterBranch !== 'all') {
+      const parsedBranch = Number(filterBranch);
+      if (!isNaN(parsedBranch) && parsedBranch > 0) {
+        resolvedLocationId = parsedBranch;
+      }
+    }
+
+    const resolvedLocationName =
+      veh.locationName ||
+      availableLocations.find((l) => l.id === resolvedLocationId)?.name ||
+      (filterBranch !== 'all' ? allBranches.find((b) => b.id === filterBranch)?.name : undefined) ||
+      '';
+
     selectVehicleForQuote({
       model: vehicleTitle,
       group: vehicleCategory,
       plateNo: veh.plateNo,
       rate: 145,
+      locationId: resolvedLocationId,
+      locationName: resolvedLocationName,
     });
+    setIsFleetPickerOpen(false);
   };
 
   return (
@@ -359,45 +529,36 @@ export const VehicleFleetPickerModal: React.FC = () => {
                 <Filter className="w-3.5 h-3.5 text-blue-600" />
                 <span>7. Vehicle Group:</span>
               </span>
-              <select
-                value={selectedGroupId}
-                onChange={(e) => {
-                  const val = e.target.value === 'all' ? 'all' : Number(e.target.value);
-                  setSelectedGroupId(val);
-                }}
-                className="px-2.5 py-1 bg-white border border-slate-300 rounded-md font-semibold text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none shadow-2xs"
-              >
-                <option value="all">All Groups</option>
-                {vehicleGroups.length > 0 ? (
-                  vehicleGroups.map((grp) => {
-                    const label = grp.description
-                      ? `${grp.name} — ${grp.description}`
-                      : `Group ${grp.name}`;
-                    return (
-                      <option key={grp.id} value={grp.id}>
-                        {label}
-                      </option>
-                    );
-                  })
-                ) : (
-                  <option value={selectedGroupId}>Loading groups...</option>
+              <div className="flex items-center space-x-1.5">
+                <select
+                  value={selectedGroupId}
+                  onChange={(e) => {
+                    const val = e.target.value === 'all' ? 'all' : Number(e.target.value);
+                    setSelectedGroupId(val);
+                    fetchFleetVehicles(val, undefined, false);
+                  }}
+                  className="px-2.5 py-1 bg-white border border-slate-300 rounded-md font-semibold text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none shadow-2xs"
+                >
+                  <option value="all">All Groups</option>
+                  {vehicleGroups.length > 0 ? (
+                    vehicleGroups.map((grp) => {
+                      const label = grp.description
+                        ? `${grp.name} — ${grp.description}`
+                        : `Group ${grp.name}`;
+                      return (
+                        <option key={grp.id} value={grp.id}>
+                          {label}
+                        </option>
+                      );
+                    })
+                  ) : (
+                    <option value={selectedGroupId}>Loading groups...</option>
+                  )}
+                </select>
+                {loadingVehicles && (
+                  <RefreshCw className="w-3.5 h-3.5 text-blue-600 animate-spin" />
                 )}
-              </select>
-
-              <button
-                type="button"
-                onClick={() => fetchFleetVehicles(selectedGroupId, undefined, true)}
-                disabled={loadingVehicles}
-                className="px-3 py-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium rounded-md text-xs flex items-center space-x-1.5 transition-colors shadow-2xs cursor-pointer"
-                title="Search fleet vehicles from Speed Auto ERP"
-              >
-                {loadingVehicles ? (
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <Search className="w-3.5 h-3.5" />
-                )}
-                <span>{loadingVehicles ? 'Searching...' : 'Search'}</span>
-              </button>
+              </div>
             </div>
 
             <div className="flex items-center space-x-2">
@@ -441,7 +602,7 @@ export const VehicleFleetPickerModal: React.FC = () => {
                 <option value="all">All Branches</option>
                 {allBranches.map((loc) => (
                   <option key={loc.id} value={loc.id}>
-                    {loc.name}
+                    {loc.label}
                   </option>
                 ))}
               </select>
@@ -528,10 +689,18 @@ export const VehicleFleetPickerModal: React.FC = () => {
 
           {/* Result Count and Active Filters Feedback */}
           <div className="flex items-center justify-between text-[11px] pt-1 text-slate-500">
-            <span>
-              Showing <strong className="text-slate-800">{filteredVehicles.length}</strong> of{' '}
-              <strong className="text-slate-800">{vehicles.length}</strong> available vehicles
-            </span>
+            <div className="flex items-center space-x-2">
+              <span>
+                Showing <strong className="text-slate-800">{filteredVehicles.length}</strong> of{' '}
+                <strong className="text-slate-800">{vehicles.length}</strong> available vehicles
+              </span>
+              {backgroundLoadingText && (
+                <span className="flex items-center space-x-1 text-blue-600 font-medium animate-pulse text-[10px]">
+                  <RefreshCw className="w-2.5 h-2.5 animate-spin" />
+                  <span>{backgroundLoadingText}</span>
+                </span>
+              )}
+            </div>
             {activeFiltersCount > 0 && (
               <span className="text-blue-600 font-semibold">
                 {activeFiltersCount} filter{activeFiltersCount > 1 ? 's' : ''} applied

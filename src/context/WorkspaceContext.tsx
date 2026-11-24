@@ -116,6 +116,7 @@ interface WorkspaceContextType {
     status?: string;
     fromDate?: string;
     toDate?: string;
+    forceRefresh?: boolean;
   }) => Promise<{ success: boolean; count: number; message: string }>;
   isSearchingBooking: boolean;
   isSearchingAgreement: boolean;
@@ -161,7 +162,14 @@ interface WorkspaceContextType {
   resetCustomer: () => void;
 
   // Fleet & Vehicle Selection
-  selectVehicleForQuote: (vehicle: { model: string; group: string; plateNo?: string; rate?: number }) => void;
+  selectVehicleForQuote: (vehicle: {
+    model: string;
+    group: string;
+    plateNo?: string;
+    rate?: number;
+    locationId?: number;
+    locationName?: string;
+  }) => void;
 
   // Agreement Extension & Return Actions
   extendRentalAgreement: (params: { newReturnDate: string; newReturnTime: string; additionalCharges: number; notes: string }) => Promise<{ success: boolean; message: string }>;
@@ -237,7 +245,20 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     return null;
   };
 
-  const rawExtractedMobile = extractMobileFromUrl();
+  let rawExtractedMobile = extractMobileFromUrl();
+  let rawExtractedEmail = searchParams.get('email');
+
+  // If mobile parameter contains '@', it is an email
+  if (rawExtractedMobile && rawExtractedMobile.includes('@')) {
+    if (!rawExtractedEmail) rawExtractedEmail = rawExtractedMobile;
+    rawExtractedMobile = null;
+  }
+  // If email parameter does not contain '@' and looks like a phone number, it is a mobile
+  if (rawExtractedEmail && !rawExtractedEmail.includes('@') && /^\+?[\d\s-]{6,}$/.test(rawExtractedEmail.trim())) {
+    if (!rawExtractedMobile) rawExtractedMobile = rawExtractedEmail;
+    rawExtractedEmail = null;
+  }
+
   const urlMobile = rawExtractedMobile
     ? rawExtractedMobile.startsWith(' ')
       ? '+' + rawExtractedMobile.trim()
@@ -246,7 +267,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       : rawExtractedMobile
     : null;
 
-  const urlEmail = searchParams.get('email');
+  const urlEmail = rawExtractedEmail ? rawExtractedEmail.trim() : null;
   const urlApiKey = searchParams.get('apiKey');
   const hasUrlSearch = Boolean(urlMobile || urlEmail);
 
@@ -439,6 +460,19 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       const docs = Array.isArray(c.identityDocuments) ? c.identityDocuments : [];
       const cards = Array.isArray(c.contactCards) ? c.contactCards : [];
 
+      // Ensure mobile strictly has phone and email strictly has email
+      let finalMobile = c.mobileNo || fallbackMobile || undefined;
+      let finalEmail = c.email || fallbackEmail || undefined;
+
+      if (finalMobile && finalMobile.includes('@')) {
+        if (!finalEmail) finalEmail = finalMobile;
+        finalMobile = undefined;
+      }
+      if (finalEmail && !finalEmail.includes('@') && /^\+?[\d\s-]{6,}$/.test(finalEmail.trim())) {
+        if (!finalMobile) finalMobile = finalEmail;
+        finalEmail = undefined;
+      }
+
       setCustomerCards(cards);
       setCustomer({
         id: c.id !== undefined && c.id !== null ? String(c.id) : '—',
@@ -448,8 +482,8 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         name: displayName,
         avatarInitials: getInitials(displayName),
         isVerified: docs.length > 0,
-        mobile: c.mobileNo || fallbackMobile || '—',
-        email: c.email || fallbackEmail || '—',
+        mobile: finalMobile || '—',
+        email: finalEmail || '—',
         contactCategory: c.contactCategory ?? null,
         locationId: c.locationId ?? null,
         locationName: matchedLoc?.name || c.address?.city || undefined,
@@ -850,7 +884,19 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const fetchInvoiceDetails = async (voucherNo: string) => {
     const invRes = await apiService.getInvoice(voucherNo);
     if (invRes.success && invRes.result) {
-      return { success: true, message: `Invoice ${invRes.result.voucherNo} ready` };
+      if (invRes.result.voucherLines && invRes.result.voucherLines.length > 0) {
+        setSelectedInvoiceLines(invRes.result.voucherLines);
+      }
+      if (invRes.result.voucherNo) {
+        setBillingSummary((prev) => ({
+          ...prev,
+          invoiceNo: invRes.result.voucherNo,
+          invoiceTotal: invRes.result.amount ?? prev.invoiceTotal,
+          amountPaid: invRes.result.amount ?? prev.amountPaid,
+          vatAmount: invRes.result.tax ?? prev.vatAmount,
+        }));
+      }
+      return { success: true, message: `Loaded invoice ${invRes.result.voucherNo}` };
     }
     return { success: false, message: `Invoice ${voucherNo} queued` };
   };
@@ -955,6 +1001,38 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
         return { success: true, message: `Loaded customer ${displayName}` };
       }
+
+      // Record not found: update customer cleanly with searched email in Email, or searched phone in Mobile
+      setCustomerCards([]);
+      setCustomer({
+        id: '—',
+        tenantId: undefined,
+        firstName: null,
+        lastName: null,
+        name: 'Customer Record Not Found',
+        avatarInitials: '?',
+        isVerified: false,
+        mobile: isEmail ? '—' : trimmed,
+        email: isEmail ? trimmed : '—',
+        contactCategory: null,
+        locationId: null,
+        locationName: undefined,
+        nationality: null,
+        dateOfBirth: null,
+        gender: null,
+        address: null,
+        identityDocuments: [],
+        contactCards: [],
+        preferredLanguage: '—',
+        idLicenseStatus: 'No docs',
+        openTicketsCount: 0,
+        activeRentalNo: mockActiveRental.agreementNo,
+        previousRentalNo: mockPreviousRental.agreementNo,
+      });
+
+      const paramKey = isEmail ? 'email' : 'mobile';
+      navigate(`${location.pathname}?${paramKey}=${encodeURIComponent(trimmed)}`, { replace: true });
+
       return { success: false, message: `No record found for "${trimmed}"` };
     } catch {
       return { success: false, message: 'Network or lookup error' };
@@ -983,11 +1061,22 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     });
   };
 
-  const selectVehicleForQuote = (vehicle: { model: string; group: string; plateNo?: string; rate?: number }) => {
+  const selectVehicleForQuote = (vehicle: {
+    model: string;
+    group: string;
+    plateNo?: string;
+    rate?: number;
+    locationId?: number;
+    locationName?: string;
+  }) => {
     setReservationQuote((prev) => {
       const newTotal = vehicle.rate ? vehicle.rate * (prev.rentalDays || 3) * 1.05 : prev.quoteBreakdown.totalAmount;
       return {
         ...prev,
+        pickupLocationId: vehicle.locationId ?? prev.pickupLocationId,
+        pickupLocation: vehicle.locationName || prev.pickupLocation,
+        returnLocationId: vehicle.locationId ?? prev.returnLocationId,
+        returnLocation: vehicle.locationName || prev.returnLocation,
         vehicleGroup: vehicle.group,
         vehicleSubtitle: `${vehicle.group} • ${vehicle.model}`,
         vehicle: {
@@ -995,6 +1084,8 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           model: vehicle.model,
           group: vehicle.group,
           plateNo: vehicle.plateNo || prev.vehicle.plateNo,
+          locationId: vehicle.locationId,
+          locationName: vehicle.locationName,
         },
         quoteBreakdown: {
           ...prev.quoteBreakdown,
@@ -1462,6 +1553,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     status?: string;
     fromDate?: string;
     toDate?: string;
+    forceRefresh?: boolean;
   }) => {
     const targetCustomerId =
       params?.customerId !== undefined
@@ -1471,7 +1563,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         : 0;
 
     const queryKey = `${targetCustomerId}|${params?.agreementNo ?? ''}|${params?.status ?? ''}|${params?.fromDate ?? ''}|${params?.toDate ?? ''}`;
-    if (lastFilteredAgreementQueryRef.current === queryKey) {
+    if (!params?.forceRefresh && lastFilteredAgreementQueryRef.current === queryKey) {
       return { success: true, count: agreementResults.length, message: 'Agreements already loaded' };
     }
     lastFilteredAgreementQueryRef.current = queryKey;

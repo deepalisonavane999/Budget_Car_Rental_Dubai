@@ -505,10 +505,14 @@ export class BudgetApiService {
   public async getVehicles(params: {
     vehicleGroupId?: number;
     pageNumber?: number;
+    pageSize?: number;
   } = {}): Promise<ApiResponse<{ totalCount: number; items: VehicleItem[] }>> {
     const payload: Record<string, any> = {
       PageNumber: params.pageNumber ?? 1,
     };
+    if (params.pageSize) {
+      payload.PageSize = params.pageSize;
+    }
     if (params.vehicleGroupId !== undefined && params.vehicleGroupId > 0) {
       payload.VehicleGroupId = params.vehicleGroupId;
     }

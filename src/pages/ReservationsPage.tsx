@@ -177,15 +177,6 @@ export const ReservationsPage: React.FC = () => {
                   </div>
                 </div>
               </div>
-
-              <button
-                type="button"
-                onClick={() => setIsFleetPickerOpen(true)}
-                className="px-2 py-0.5 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-600 rounded text-[9px] font-semibold flex items-center space-x-1"
-                title="Browse Speed API vehicle fleet"
-              >
-                <span>Change Car</span>
-              </button>
             </div>
 
             <div className="col-span-3 border-l border-slate-100 pl-2">

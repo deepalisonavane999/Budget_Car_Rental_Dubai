@@ -111,9 +111,11 @@ export interface ReservationQuote {
   source: string;
   status: string;
   pickupLocation: string;
+  pickupLocationId?: number;
   pickupDate: string;
   pickupTime: string;
   returnLocation: string;
+  returnLocationId?: number;
   returnDate: string;
   returnTime: string;
   rentalType: string;
@@ -129,6 +131,8 @@ export interface ReservationQuote {
     transmission: string;
     image: string;
     plateNo?: string;
+    locationId?: number;
+    locationName?: string;
   };
   quoteBreakdown: {
     rentalCharges: number;
