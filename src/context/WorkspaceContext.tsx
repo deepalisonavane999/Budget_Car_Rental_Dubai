@@ -25,6 +25,8 @@ import {
   mockReservationQuote,
   mockCaseDetails,
   mockRoadsideAssistance,
+  collectionAgreementsResponse,
+  collectionBookingsResponse,
 } from '../services/mockDataAccCollection';
 import {
   apiService,
@@ -69,12 +71,14 @@ interface WorkspaceContextType {
   vehicleGroups: VehicleGroupItem[];
   setVehicleGroups: React.Dispatch<React.SetStateAction<VehicleGroupItem[]>>;
   chargesSettings: ChargeSettingItem[];
+  fetchLocations: () => Promise<LocationItem[]>;
+  fetchChargesSettings: () => Promise<ChargeSettingItem[]>;
   isLoadingCustomer: boolean;
   refreshCustomerData: () => Promise<void>;
 
   // Domain Actions
   checkVehicleAvailability: (vehicleGroupId?: number) => Promise<{ count: number; success: boolean; message: string }>;
-  createReservationBooking: () => Promise<{ success: boolean; bookingNo: string; message: string }>;
+  createReservationBooking: (customPayload?: BookingTransactionPayload) => Promise<{ success: boolean; bookingNo: string; message: string }>;
   updateReservationBooking: (notes?: string) => Promise<{ success: boolean; message: string }>;
   confirmReservationBooking: (bookingNo?: string) => Promise<{ success: boolean; message: string }>;
   cancelReservationBooking: (bookingNo?: string, reason?: string) => Promise<{ success: boolean; message: string }>;
@@ -83,7 +87,11 @@ interface WorkspaceContextType {
   fetchStatementOfAccounts: () => Promise<{ success: boolean; message: string }>;
   fetchVehicleAccident: (plateNo: string) => Promise<{ success: boolean; message: string; data?: any }>;
   searchBookingOrAgreement: (query: string) => Promise<{ success: boolean; message: string; plateNo?: string }>;
-  loadBillingForAgreement: (agreementNo: string, customerId?: number) => Promise<{ success: boolean; message: string }>;
+  loadBillingForAgreement: (
+    agreementNo: string,
+    customerId?: number,
+    options?: { fromDate?: string; toDate?: string; status?: string }
+  ) => Promise<{ success: boolean; message: string }>;
   selectedAgreementVouchers: VoucherItem[];
   setSelectedAgreementVouchers: React.Dispatch<React.SetStateAction<VoucherItem[]>>;
   selectedInvoiceLines: InvoiceLineItem[];
@@ -93,6 +101,8 @@ interface WorkspaceContextType {
   // Booking Filter & Query Results
   bookingResults: BookingItem[];
   setBookingResults: React.Dispatch<React.SetStateAction<BookingItem[]>>;
+  agreementResults: AgreementItem[];
+  setAgreementResults: React.Dispatch<React.SetStateAction<AgreementItem[]>>;
   executeBookingFilter: (params?: {
     customerId?: number;
     bookingNo?: string;
@@ -100,7 +110,15 @@ interface WorkspaceContextType {
     fromDate?: string;
     toDate?: string;
   }) => Promise<{ success: boolean; count: number; message: string }>;
+  executeAgreementFilter: (params?: {
+    customerId?: number;
+    agreementNo?: string;
+    status?: string;
+    fromDate?: string;
+    toDate?: string;
+  }) => Promise<{ success: boolean; count: number; message: string }>;
   isSearchingBooking: boolean;
+  isSearchingAgreement: boolean;
 
   // Navigation & Communication State
   activeNavTab: string;
@@ -135,6 +153,8 @@ interface WorkspaceContextType {
   setIsExtensionOpen: (open: boolean) => void;
   isReturnOpen: boolean;
   setIsReturnOpen: (open: boolean) => void;
+  isCreateBookingOpen: boolean;
+  setIsCreateBookingOpen: (open: boolean) => void;
 
   // Search & Profile Actions
   searchCustomer: (query: string) => Promise<{ success: boolean; message: string }>;
@@ -172,8 +192,127 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const queueName = 'Arabic CRM';
   const ivrPath = 'Arabic → Existing Rental → Billing Support';
 
-  const [customer, setCustomer] = useState<CustomerProfile>(mockCustomer);
-  const [customerCards, setCustomerCards] = useState<ContactCardItem[]>(mockCustomer.contactCards || []);
+  // Helper to extract phone/mobile from URL while strictly preserving '+' symbol
+  // (Standard searchParams.get decodes '+' into space ' ', which loses the international dial code)
+  const extractMobileFromUrl = (): string | null => {
+    const rawSearch = typeof window !== 'undefined' ? window.location.search : location.search;
+    const paramNames = ['mobile', 'mobileno', 'mobileNo', 'phone', 'caller', 'callerNumber'];
+
+    for (const name of paramNames) {
+      const match = rawSearch.match(new RegExp(`(?:[?&])${name}=([^&#]*)`, 'i'));
+      if (match && match[1]) {
+        const rawVal = match[1];
+        if (rawVal.includes('+')) {
+          try {
+            return decodeURIComponent(rawVal.replace(/\+/g, '%2B')).trim();
+          } catch {
+            return rawVal.trim();
+          }
+        }
+        try {
+          const decoded = decodeURIComponent(rawVal).trim();
+          if (decoded) {
+            if (decoded.startsWith(' ') && /^\s*\d+$/.test(decoded)) {
+              return '+' + decoded.trim();
+            }
+            return decoded;
+          }
+        } catch {
+          return rawVal.trim();
+        }
+      }
+    }
+
+    // Fallback to searchParams - if searchParams turned '+' into space ' ', restore '+'
+    for (const name of paramNames) {
+      const val = searchParams.get(name);
+      if (val) {
+        if (val.startsWith(' ') && /^\s*\d+$/.test(val)) {
+          return '+' + val.trim();
+        }
+        return val.trim();
+      }
+    }
+
+    return null;
+  };
+
+  const rawExtractedMobile = extractMobileFromUrl();
+  const urlMobile = rawExtractedMobile
+    ? rawExtractedMobile.startsWith(' ')
+      ? '+' + rawExtractedMobile.trim()
+      : /^971\d+$/.test(rawExtractedMobile)
+      ? '+' + rawExtractedMobile
+      : rawExtractedMobile
+    : null;
+
+  const urlEmail = searchParams.get('email');
+  const urlApiKey = searchParams.get('apiKey');
+  const hasUrlSearch = Boolean(urlMobile || urlEmail);
+
+  if (urlApiKey && urlApiKey !== apiService.getApiKey()) {
+    apiService.setApiKey(urlApiKey);
+  }
+
+  const emptyCustomer: CustomerProfile = {
+    id: '—',
+    tenantId: undefined,
+    firstName: null,
+    lastName: null,
+    name: '—',
+    avatarInitials: '?',
+    isVerified: false,
+    mobile: urlMobile || '—',
+    email: urlEmail || '—',
+    contactCategory: null,
+    locationId: null,
+    locationName: undefined,
+    nationality: null,
+    dateOfBirth: null,
+    gender: null,
+    address: null,
+    identityDocuments: [],
+    contactCards: [],
+    preferredLanguage: '—',
+    idLicenseStatus: 'No docs',
+    openTicketsCount: 0,
+    activeRentalNo: undefined,
+    previousRentalNo: undefined,
+  };
+
+  const emptyRental: RentalAgreement = {
+    agreementNo: '—',
+    status: 'Active',
+    vehicle: {
+      model: '—',
+      group: '—',
+      category: '—',
+      image: '/assets/nissan-sunny.png',
+      plateNo: '—',
+      seats: 5,
+      bags: 2,
+      transmission: 'Automatic',
+    },
+    pickupDate: '—',
+    pickupTime: '—',
+    pickupLocation: '—',
+    returnDate: '—',
+    returnTime: '—',
+    returnLocation: '—',
+    rentalPeriodDays: 0,
+    depositAmount: 0,
+    depositStatus: '—',
+    totalCharges: 0,
+    rentalCharges: 0,
+    estimatedCharges: 0,
+  };
+
+  const [customer, setCustomer] = useState<CustomerProfile>(() =>
+    hasUrlSearch ? emptyCustomer : mockCustomer
+  );
+  const [customerCards, setCustomerCards] = useState<ContactCardItem[]>(() =>
+    hasUrlSearch ? [] : (mockCustomer.contactCards || [])
+  );
   const [activeRental, setActiveRental] = useState<RentalAgreement>(mockActiveRental);
   const [previousRental, setPreviousRental] = useState<RentalAgreement>(mockPreviousRental);
   const [billingSummary, setBillingSummary] = useState<BillingSummary>(mockBillingSummary);
@@ -202,6 +341,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [isFleetPickerOpen, setIsFleetPickerOpen] = useState(false);
   const [isExtensionOpen, setIsExtensionOpen] = useState(false);
   const [isReturnOpen, setIsReturnOpen] = useState(false);
+  const [isCreateBookingOpen, setIsCreateBookingOpen] = useState(false);
 
   const toggleLeftSidebar = () => setIsLeftSidebarOpen((prev) => !prev);
   const toggleRightSidebar = () => setIsRightSidebarOpen((prev) => !prev);
@@ -267,20 +407,6 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     });
   };
 
-  const urlMobile =
-    searchParams.get('mobile') ||
-    searchParams.get('mobileno') ||
-    searchParams.get('mobileNo') ||
-    searchParams.get('phone') ||
-    searchParams.get('caller') ||
-    searchParams.get('callerNumber');
-
-  const urlEmail = searchParams.get('email');
-  const urlApiKey = searchParams.get('apiKey');
-
-  if (urlApiKey && urlApiKey !== apiService.getApiKey()) {
-    apiService.setApiKey(urlApiKey);
-  }
 
   const lastFetchedUrlKeyRef = useRef<string | null>(null);
 
@@ -342,132 +468,109 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
       const custId = c.id;
       if (custId) {
-        const [openAgrRes, closedAgrRes, bookRes, voucherRes, depositRes, finesRes] =
-          await Promise.all([
-            apiService.getAgreements({ customerId: custId, status: 'Open' }),
-            apiService.getAgreements({ customerId: custId, status: 'Closed' }),
-            apiService.getBookings({ customerId: custId, status: 'Confirmed' }),
-            apiService.getVouchers({ customerId: custId }),
-            apiService.getDeposit({ customerId: custId }),
-            apiService.getTrafficFines({ customerId: custId }),
-          ]);
+        // Fetch agreements and bookings in parallel (2 lean calls instead of eager billing queries)
+        const [agrRes, bookRes] = await Promise.all([
+          apiService.getAgreements({ customerId: custId }),
+          apiService.getBookings({ customerId: custId }),
+        ]);
 
-        if (openAgrRes.success && openAgrRes.result?.items?.length) {
-          const first: AgreementItem = openAgrRes.result.items[0];
-          const [startDt, startTm] = (first.startDate || '').split('T');
-          const [endDt, endTm] = (first.endDate || '').split('T');
-          setCustomer((prev) => ({ ...prev, activeRentalNo: first.agreementNo }));
-          setActiveRental((prev) => ({
-            ...prev,
-            agreementNo: first.agreementNo,
-            pickupLocation: first.location || first.pickupLocation || '—',
-            returnLocation: first.location || first.pickupLocation || '—',
-            pickupDate: startDt || '—',
-            pickupTime: startTm ? startTm.slice(0, 5) : prev.pickupTime,
-            returnDate: endDt || '—',
-            returnTime: endTm ? endTm.slice(0, 5) : prev.returnTime,
-            totalCharges: first.totalCharges ?? 0,
-            rentalCharges: first.totalCharges ?? 0,
-            estimatedCharges: first.totalCharges ?? 0,
-            status: first.agreementStatus === 'Open' ? 'Active' : 'Returned',
-          }));
-        }
+        if (agrRes.success && agrRes.result?.items) {
+          const items = agrRes.result.items;
+          setAgreementResults(items);
 
-        if (closedAgrRes.success && closedAgrRes.result?.items?.length) {
-          const prevAgr: AgreementItem = closedAgrRes.result.items[0];
-          const [startDt, startTm] = (prevAgr.startDate || '').split('T');
-          const [endDt, endTm] = (prevAgr.endDate || '').split('T');
-          setCustomer((prev) => ({ ...prev, previousRentalNo: prevAgr.agreementNo }));
-          setPreviousRental((prev) => ({
-            ...prev,
-            agreementNo: prevAgr.agreementNo,
-            pickupLocation: prevAgr.location || prevAgr.pickupLocation || '—',
-            returnLocation: prevAgr.location || prevAgr.pickupLocation || '—',
-            pickupDate: startDt || '—',
-            pickupTime: startTm ? startTm.slice(0, 5) : prev.pickupTime,
-            returnDate: endDt || '—',
-            returnTime: endTm ? endTm.slice(0, 5) : prev.returnTime,
-            totalCharges: prevAgr.totalCharges ?? prev.totalCharges,
-          }));
-        }
+          // 1. Map Active/Open Agreement
+          const openAgr =
+            items.find(
+              (a) =>
+                (a.agreementStatus || '').toLowerCase() === 'open' ||
+                (a.agreementStatus || '').toLowerCase() === 'active'
+            ) || items[0];
 
-        if (bookRes.success && bookRes.result?.items?.length) {
-          const book = bookRes.result.items[0];
-          const [startDt, startTm] = (book.startDate || '').split('T');
-          const [endDt, endTm] = (book.endDate || '').split('T');
-          setReservationQuote((prev) => ({
-            ...prev,
-            quoteNo: book.agreementNo || book.bookingNo || prev.quoteNo,
-            pickupDate: startDt || prev.pickupDate,
-            pickupTime: startTm ? startTm.slice(0, 5) : prev.pickupTime,
-            returnDate: endDt || prev.returnDate,
-            returnTime: endTm ? endTm.slice(0, 5) : prev.returnTime,
-            pickupLocation: book.location || prev.pickupLocation,
-            returnLocation: book.location || prev.returnLocation,
-            quoteBreakdown: {
-              ...prev.quoteBreakdown,
-              totalAmount: book.totalCharges ?? prev.quoteBreakdown.totalAmount,
-            },
-          }));
-        }
+          if (openAgr) {
+            const [startDt, startTm] = (openAgr.startDate || '').split('T');
+            const [endDt, endTm] = (openAgr.endDate || '').split('T');
+            const resolvedPlate = (openAgr as any).vehicle?.plateNo || (openAgr as any).plateNo || '';
+            setCustomer((prev) => ({ ...prev, activeRentalNo: openAgr.agreementNo }));
+            setActiveRental((prev) => ({
+              ...prev,
+              agreementNo: openAgr.agreementNo,
+              pickupLocation: openAgr.location || openAgr.pickupLocation || '—',
+              returnLocation: openAgr.location || openAgr.pickupLocation || '—',
+              pickupDate: startDt || '—',
+              pickupTime: startTm ? startTm.slice(0, 5) : prev.pickupTime,
+              returnDate: endDt || '—',
+              returnTime: endTm ? endTm.slice(0, 5) : prev.returnTime,
+              totalCharges: openAgr.totalCharges ?? 0,
+              rentalCharges: openAgr.totalCharges ?? 0,
+              estimatedCharges: openAgr.totalCharges ?? 0,
+              status: openAgr.agreementStatus === 'Open' ? 'Active' : 'Returned',
+              vehicle: {
+                ...prev.vehicle,
+                plateNo: resolvedPlate || prev.vehicle.plateNo,
+                model: openAgr.vehicle?.model || openAgr.vehicle?.make || prev.vehicle.model,
+                category: openAgr.vehicleGroup?.name || prev.vehicle.category,
+              },
+            }));
+          }
 
-        if (voucherRes.success && voucherRes.result?.items?.length) {
-          const items = voucherRes.result.items;
-          const invVoucher = items.find((v) => v.type === 1 || v.voucherTypesName === 'Invoice') || items[0];
-          const mappedTx = items.slice(0, 5).map((v) => ({
-            date: v.date ? v.date.split('T')[0] : '—',
-            refNo: v.voucherNo || String(v.id),
-            type: v.voucherTypesName || v.voucherSubTypeName || 'Voucher',
-            amount: v.amount ?? 0,
-            status: (v.isClosed ? 'Completed' : 'Pending Approval') as 'Completed' | 'Pending Approval' | 'Failed',
-            details: v.statusText || (v.isClosed ? 'Closed' : 'Open'),
-          }));
+          // 2. Map Previous/Closed Agreement
+          const closedAgr =
+            items.find(
+              (a) =>
+                (a.agreementStatus || '').toLowerCase() === 'closed' ||
+                (a.agreementStatus || '').toLowerCase() === 'returned'
+            ) || (items.length > 1 ? items[1] : undefined);
 
-          setBillingSummary((prev) => ({
-            ...prev,
-            transactions: mappedTx.length > 0 ? mappedTx : prev.transactions,
-          }));
-
-          if (invVoucher?.voucherNo) {
-            const invRes = await apiService.getInvoice(invVoucher.voucherNo);
-            if (invRes.success && invRes.result) {
-              const amt = invRes.result.amount ?? invVoucher.amount ?? 0;
-              const tax = invRes.result.tax ?? 0;
-              setBillingSummary((prev) => ({
-                ...prev,
-                invoiceNo: invRes.result.voucherNo,
-                invoiceTotal: amt,
-                amountPaid: amt,
-                vatAmount: tax,
-                totalInclVat: amt,
-              }));
-            }
+          if (closedAgr) {
+            const [startDt, startTm] = (closedAgr.startDate || '').split('T');
+            const [endDt, endTm] = (closedAgr.endDate || '').split('T');
+            const resolvedPlate = (closedAgr as any).vehicle?.plateNo || (closedAgr as any).plateNo || '';
+            setCustomer((prev) => ({ ...prev, previousRentalNo: closedAgr.agreementNo }));
+            setPreviousRental((prev) => ({
+              ...prev,
+              agreementNo: closedAgr.agreementNo,
+              pickupLocation: closedAgr.location || closedAgr.pickupLocation || '—',
+              returnLocation: closedAgr.location || closedAgr.pickupLocation || '—',
+              pickupDate: startDt || '—',
+              pickupTime: startTm ? startTm.slice(0, 5) : prev.pickupTime,
+              returnDate: endDt || '—',
+              returnTime: endTm ? endTm.slice(0, 5) : prev.returnTime,
+              totalCharges: closedAgr.totalCharges ?? prev.totalCharges,
+              vehicle: {
+                ...prev.vehicle,
+                plateNo: resolvedPlate || prev.vehicle.plateNo,
+                model: closedAgr.vehicle?.model || closedAgr.vehicle?.make || prev.vehicle.model,
+                category: closedAgr.vehicleGroup?.name || prev.vehicle.category,
+              },
+            }));
           }
         }
 
-        if (depositRes.success && depositRes.result?.items?.length) {
-          const dep = depositRes.result.items[0];
-          setBillingSummary((prev) => ({
-            ...prev,
-            securityDeposit: Math.abs(dep.amountRemaining ?? dep.amountUsed ?? 0),
-            refundStatus: dep.isClosed ? 'Settled' : 'Pending Finance',
-          }));
-        }
-
-        if (finesRes.success && finesRes.result?.items?.length) {
-          const firstFine = finesRes.result.items[0];
-          const totalFine = finesRes.result.items.reduce(
-            (acc, f) => acc + (f.amountWithSurcharge || f.amount || 0),
-            0
-          );
-          setBillingSummary((prev) => ({
-            ...prev,
-            fines: {
-              amount: totalFine,
-              evidenceFile: firstFine.fineNo || '—',
-              status: firstFine.isPaid ? 'Paid' : 'Unpaid',
-            },
-          }));
+        if (bookRes.success && bookRes.result?.items) {
+          const bItems = bookRes.result.items;
+          setBookingResults(bItems);
+          const book =
+            bItems.find(
+              (b) => (b.bookingStatus || (b as any).status || '').toLowerCase() === 'confirmed'
+            ) || bItems[0];
+          if (book) {
+            const [startDt, startTm] = (book.startDate || '').split('T');
+            const [endDt, endTm] = (book.endDate || '').split('T');
+            setReservationQuote((prev) => ({
+              ...prev,
+              quoteNo: book.agreementNo || book.bookingNo || prev.quoteNo,
+              pickupDate: startDt || prev.pickupDate,
+              pickupTime: startTm ? startTm.slice(0, 5) : prev.pickupTime,
+              returnDate: endDt || prev.returnDate,
+              returnTime: endTm ? endTm.slice(0, 5) : prev.returnTime,
+              pickupLocation: book.location || prev.pickupLocation,
+              returnLocation: book.location || prev.returnLocation,
+              quoteBreakdown: {
+                ...prev.quoteBreakdown,
+                totalAmount: book.totalCharges ?? prev.quoteBreakdown.totalAmount,
+              },
+            }));
+          }
         }
       }
     },
@@ -496,7 +599,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       if (custRes.success && custRes.result) {
         await applyCustomerResultToState(custRes.result, urlMobile || undefined, urlEmail || undefined);
       } else {
-        // Customer lookup returned no record — clear fields cleanly
+        // Customer lookup returned no record in live database — clear customer details cleanly but keep sample cards for agent review
         setCustomerCards([]);
         setCustomer({
           id: '—',
@@ -520,9 +623,11 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           preferredLanguage: '—',
           idLicenseStatus: 'No docs',
           openTicketsCount: 0,
-          activeRentalNo: undefined,
-          previousRentalNo: undefined,
+          activeRentalNo: mockActiveRental.agreementNo,
+          previousRentalNo: mockPreviousRental.agreementNo,
         });
+        setActiveRental(mockActiveRental);
+        setPreviousRental(mockPreviousRental);
       }
     } catch {
       setCustomer((prev) => ({
@@ -633,20 +738,63 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     };
   };
 
-  const createReservationBooking = async () => {
-    const res = await apiService.createBooking(buildBookingPayload('Created via CRM Workspace'));
-    if (res.success && res.result?.agreementNo) {
+  const createReservationBooking = async (customPayload?: BookingTransactionPayload) => {
+    const payload = customPayload || buildBookingPayload('Created via CRM Workspace');
+    const res = await apiService.createBooking(payload);
+    if (res.success && (res.result?.agreementNo || res.result?.bookingNo || res.result?.id)) {
+      const assignedNo = res.result.agreementNo || res.result.bookingNo || `BKG-${res.result.id}`;
       setReservationQuote((prev) => ({
         ...prev,
-        quoteNo: res.result.agreementNo,
+        quoteNo: assignedNo,
         status: 'Created',
+        pickupDate: payload.booking?.startDate || prev.pickupDate,
+        returnDate: payload.booking?.endDate || prev.returnDate,
+        pickupLocation: payload.booking?.pickupLocationAddress || prev.pickupLocation,
+        quoteBreakdown: {
+          ...prev.quoteBreakdown,
+          totalAmount: payload.amount || payload.booking?.totalCharges || prev.quoteBreakdown.totalAmount,
+        },
       }));
-      return { success: true, bookingNo: res.result.agreementNo, message: `Booking ${res.result.agreementNo} created` };
+
+      // Add newly created booking to live bookingResults list
+      if (res.result) {
+        setBookingResults((prev) => [
+          {
+            id: res.result.id || Date.now(),
+            bookingNo: assignedNo,
+            agreementNo: res.result.agreementNo || assignedNo,
+            bookingStatus: 'Confirmed',
+            startDate: payload.booking.startDate,
+            endDate: payload.booking.endDate,
+            totalCharges: payload.booking.totalCharges,
+            location: payload.booking.pickupLocationAddress,
+            locationId: payload.booking.locationId,
+            vehicleGroup: {
+              id: payload.booking.tariffGroupId || 35,
+              name: 'Sedan',
+              groupNo: 'Group AZ',
+            },
+            customer: {
+              id: payload.booking.customerId,
+              name: `${payload.booking.customer.firstName} ${payload.booking.customer.lastName}`,
+              email: payload.booking.customer.email,
+              mobileNo: payload.booking.customer.mobileNo,
+            },
+          } as any,
+          ...prev,
+        ]);
+      }
+
+      return {
+        success: true,
+        bookingNo: assignedNo,
+        message: `Booking ${assignedNo} created successfully in Speed Auto ERP`,
+      };
     }
     return {
       success: false,
       bookingNo: reservationQuote.quoteNo,
-      message: 'Unable to create booking right now',
+      message: res.error || 'Unable to create booking right now',
     };
   };
 
@@ -775,10 +923,14 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   };
 
   const searchCustomer = async (query: string): Promise<{ success: boolean; message: string }> => {
-    const trimmed = query.trim();
+    let trimmed = query.trim();
     if (!trimmed) return { success: false, message: 'Please enter an email or phone number' };
 
     const isEmail = trimmed.includes('@');
+    if (!isEmail) {
+      if (trimmed.startsWith(' ')) trimmed = '+' + trimmed.trim();
+      if (/^971\d+$/.test(trimmed)) trimmed = '+' + trimmed;
+    }
     const searchParam = isEmail ? { email: trimmed } : { mobileNo: trimmed };
     const queryKey = isEmail ? `|${trimmed}` : `${trimmed}|`;
     lastFetchedUrlKeyRef.current = queryKey;
@@ -799,7 +951,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         );
 
         const paramKey = isEmail ? 'email' : 'mobile';
-        navigate(`${location.pathname}?${paramKey}=${trimmed}`, { replace: true });
+        navigate(`${location.pathname}?${paramKey}=${encodeURIComponent(trimmed)}`, { replace: true });
 
         return { success: true, message: `Loaded customer ${displayName}` };
       }
@@ -874,6 +1026,35 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     return { success: true, message: `Agreement ${activeRental.agreementNo} check-in recorded at ${loc?.name || 'Branch'}` };
   };
 
+  const fetchLocations = async (): Promise<LocationItem[]> => {
+    if (locations.length > 0) return locations;
+    try {
+      const res = await apiService.getLocations(1, 100);
+      if (res.success && res.result?.items) {
+        setLocations(res.result.items);
+        return res.result.items;
+      }
+    } catch (e) {
+      console.warn('Failed to fetch locations', e);
+    }
+    return locations;
+  };
+
+  const fetchChargesSettings = async (): Promise<ChargeSettingItem[]> => {
+    if (chargesSettings.length > 0) return chargesSettings;
+    try {
+      const res = await apiService.getChargesSettings();
+      if (res.success && res.result) {
+        const items = Array.isArray(res.result) ? res.result : [];
+        setChargesSettings(items);
+        return items;
+      }
+    } catch (e) {
+      console.warn('Failed to fetch charges settings', e);
+    }
+    return chargesSettings;
+  };
+
   const searchBookingOrAgreement = async (query: string) => {
     const trimmed = query.trim();
     if (!trimmed) return { success: false, message: 'Please enter a booking or agreement number' };
@@ -886,7 +1067,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         const [startDt, startTm] = (item.startDate || '').split('T');
         const [endDt, endTm] = (item.endDate || '').split('T');
 
-        const resolvedPlate = (item as any).vehicle?.plateNo || (item as any).plateNo || '32849-EE-DXB';
+        const resolvedPlate = (item as any).vehicle?.plateNo || (item as any).plateNo || '';
         const updatedRental: RentalAgreement = {
           agreementNo: item.agreementNo,
           status: item.agreementStatus === 'Open' ? 'Active' : 'Returned',
@@ -940,7 +1121,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         const [startDt, startTm] = (item.startDate || '').split('T');
         const [endDt, endTm] = (item.endDate || '').split('T');
 
-        const resolvedPlate = (item as any).vehicle?.plateNo || '32849-EE-DXB';
+        const resolvedPlate = (item as any).vehicle?.plateNo || (item as any).plateNo || '';
         const updatedRental: RentalAgreement = {
           agreementNo: item.agreementNo || item.bookingNo || trimmed,
           status: item.bookingStatus === 'Closed' ? 'Returned' : 'Active',
@@ -978,39 +1159,63 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   };
 
-  const [bookingResults, setBookingResults] = useState<BookingItem[]>([]);
+  const [bookingResults, setBookingResults] = useState<BookingItem[]>(
+    () => (collectionBookingsResponse.items as unknown as BookingItem[]) || []
+  );
+  const [agreementResults, setAgreementResults] = useState<AgreementItem[]>(
+    () => (collectionAgreementsResponse.items as unknown as AgreementItem[]) || []
+  );
   const [isSearchingBooking, setIsSearchingBooking] = useState(false);
+  const [isSearchingAgreement, setIsSearchingAgreement] = useState(false);
   const [selectedAgreementVouchers, setSelectedAgreementVouchers] = useState<VoucherItem[]>([]);
   const [selectedInvoiceLines, setSelectedInvoiceLines] = useState<InvoiceLineItem[]>([]);
   const [isLoadingBillingAgreement, setIsLoadingBillingAgreement] = useState(false);
+  const lastLoadedAgreementRef = useRef<string | null>(null);
 
-  const loadBillingForAgreement = async (agreementNo: string, customCustomerId?: number) => {
+  const loadBillingForAgreement = async (
+    agreementNo: string,
+    customCustomerId?: number,
+    options?: { fromDate?: string; toDate?: string; status?: string }
+  ) => {
     const trimmed = agreementNo.trim();
     if (!trimmed) return { success: false, message: 'Invalid agreement number' };
 
+    const cacheKey = `${trimmed}|${options?.fromDate || ''}|${options?.toDate || ''}|${options?.status || ''}`;
+    if (lastLoadedAgreementRef.current === cacheKey) {
+      return { success: true, message: `Loaded agreement ${trimmed} into Billing Overview` };
+    }
+
     setIsLoadingBillingAgreement(true);
     try {
+      lastLoadedAgreementRef.current = cacheKey;
       let resolvedCustomerId = customCustomerId && customCustomerId > 0 ? customCustomerId : 0;
-      let agrItem: AgreementItem | null = null;
-
-      // 1. Get Agreement Details from GetAgreementByDifferentFilters
-      const agrRes = await apiService.getAgreements({ agreementNo: trimmed });
-      if (agrRes.success && agrRes.result?.items && agrRes.result.items.length > 0) {
-        agrItem = agrRes.result.items[0];
-        if (agrItem.customerId && (!resolvedCustomerId || resolvedCustomerId <= 0)) {
-          resolvedCustomerId = agrItem.customerId;
-        }
-      }
-
       if (!resolvedCustomerId && customer.id && customer.id !== '—') {
         const parsed = parseInt(String(customer.id).replace(/\D/g, ''), 10);
         if (!isNaN(parsed) && parsed > 0) resolvedCustomerId = parsed;
       }
 
+      // Check if already in agreementResults
+      let agrItem: AgreementItem | null = agreementResults.find((a) => a.agreementNo === trimmed) || null;
+      if (!agrItem) {
+        const agrRes = await apiService.getAgreements({
+          agreementNo: trimmed,
+          customerId: resolvedCustomerId > 0 ? resolvedCustomerId : undefined,
+          fromDate: options?.fromDate,
+          toDate: options?.toDate,
+          status: options?.status,
+        });
+        if (agrRes.success && agrRes.result?.items && agrRes.result.items.length > 0) {
+          agrItem = agrRes.result.items[0];
+          if (agrItem.customerId && (!resolvedCustomerId || resolvedCustomerId <= 0)) {
+            resolvedCustomerId = agrItem.customerId;
+          }
+        }
+      }
+
       if (agrItem) {
         const [startDt, startTm] = (agrItem.startDate || '').split('T');
         const [endDt, endTm] = (agrItem.endDate || '').split('T');
-        const resolvedPlate = (agrItem as any).vehicle?.plateNo || (agrItem as any).plateNo || '32849-EE-DXB';
+        const resolvedPlate = (agrItem as any).vehicle?.plateNo || (agrItem as any).plateNo || '';
         const updatedRental: RentalAgreement = {
           agreementNo: agrItem.agreementNo,
           status: agrItem.agreementStatus === 'Open' ? 'Active' : 'Returned',
@@ -1221,9 +1426,9 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       const res = await apiService.getBookings({
         customerId: targetCustomerId,
         bookingNo: params?.bookingNo,
-        status: params?.status || 'NA',
-        fromDate: params?.fromDate || '2020-01-01T00:00:00',
-        toDate: params?.toDate || '2026-12-31T23:59:59',
+        status: params?.status,
+        fromDate: params?.fromDate,
+        toDate: params?.toDate,
       });
 
       if (res.success && res.result?.items) {
@@ -1243,32 +1448,68 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       }
     } catch {
       setBookingResults([]);
-      return { success: false, count: 0, message: 'Failed to query bookings' };
+      return { success: false, count: 0, message: 'Failed to load bookings' };
     } finally {
       setIsSearchingBooking(false);
     }
   };
 
-  // Pre-load customer bookings for quick lookup
-  useEffect(() => {
-    if (customer.id && customer.id !== '—') {
-      const clean = parseInt(String(customer.id).replace(/\D/g, ''), 10);
-      if (clean > 0) {
-        executeBookingFilter({ customerId: clean });
-      }
-    }
-  }, [customer.id]);
+  const lastFilteredAgreementQueryRef = useRef<string | null>(null);
 
-  // Pre-load connected billing (vouchers, invoice lines, deposit, fines) for previous agreement
-  useEffect(() => {
-    if (previousRental.agreementNo && previousRental.agreementNo !== '—') {
-      const custId =
-        customer.id && customer.id !== '—'
-          ? parseInt(String(customer.id).replace(/\D/g, ''), 10)
-          : undefined;
-      loadBillingForAgreement(previousRental.agreementNo, custId);
+  const executeAgreementFilter = async (params?: {
+    customerId?: number;
+    agreementNo?: string;
+    status?: string;
+    fromDate?: string;
+    toDate?: string;
+  }) => {
+    const targetCustomerId =
+      params?.customerId !== undefined
+        ? params.customerId
+        : customer.id && customer.id !== '—'
+        ? parseInt(String(customer.id).replace(/\D/g, ''), 10) || 0
+        : 0;
+
+    const queryKey = `${targetCustomerId}|${params?.agreementNo ?? ''}|${params?.status ?? ''}|${params?.fromDate ?? ''}|${params?.toDate ?? ''}`;
+    if (lastFilteredAgreementQueryRef.current === queryKey) {
+      return { success: true, count: agreementResults.length, message: 'Agreements already loaded' };
     }
-  }, [customer.id, previousRental.agreementNo]);
+    lastFilteredAgreementQueryRef.current = queryKey;
+
+    setIsSearchingAgreement(true);
+    try {
+      const res = await apiService.getAgreements({
+        customerId: targetCustomerId,
+        agreementNo: params?.agreementNo,
+        status: params?.status,
+        fromDate: params?.fromDate,
+        toDate: params?.toDate,
+      });
+
+      if (res.success && res.result?.items) {
+        setAgreementResults(res.result.items);
+        return {
+          success: true,
+          count: res.result.items.length,
+          message: `Loaded ${res.result.items.length} agreement${res.result.items.length === 1 ? '' : 's'}`,
+        };
+      } else {
+        setAgreementResults([]);
+        return {
+          success: false,
+          count: 0,
+          message: res.error || 'No agreements found',
+        };
+      }
+    } catch {
+      setAgreementResults([]);
+      return { success: false, count: 0, message: 'Failed to load agreements' };
+    } finally {
+      setIsSearchingAgreement(false);
+    }
+  };
+
+
 
   return (
     <WorkspaceContext.Provider
@@ -1290,6 +1531,8 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         vehicleGroups,
         setVehicleGroups,
         chargesSettings,
+        fetchLocations,
+        fetchChargesSettings,
         isLoadingCustomer,
         refreshCustomerData: fetchCustomerData,
         checkVehicleAvailability,
@@ -1310,8 +1553,12 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         isLoadingBillingAgreement,
         bookingResults,
         setBookingResults,
+        agreementResults,
+        setAgreementResults,
         executeBookingFilter,
+        executeAgreementFilter,
         isSearchingBooking,
+        isSearchingAgreement,
         activeNavTab,
         setActiveNavTab,
         commMode,
@@ -1340,6 +1587,8 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         setIsExtensionOpen,
         isReturnOpen,
         setIsReturnOpen,
+        isCreateBookingOpen,
+        setIsCreateBookingOpen,
         searchCustomer,
         resetCustomer,
         selectVehicleForQuote,

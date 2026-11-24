@@ -26,6 +26,7 @@ export const ReservationsPage: React.FC = () => {
     confirmReservationBooking,
     cancelReservationBooking,
     setIsFleetPickerOpen,
+    setIsCreateBookingOpen,
     setVehicleGroups,
   } = useWorkspace();
   const [leadHistory] = useState(mockLeadHistory);
@@ -51,11 +52,8 @@ export const ReservationsPage: React.FC = () => {
     setIsFleetPickerOpen(true);
   };
 
-  const handleCreateBooking = async () => {
-    setIsBusy(true);
-    const res = await createReservationBooking();
-    setIsBusy(false);
-    triggerNotice(res.message);
+  const handleCreateBooking = () => {
+    setIsCreateBookingOpen(true);
   };
 
   const handleConfirmBooking = async () => {
@@ -80,7 +78,7 @@ export const ReservationsPage: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 flex flex-col justify-start overflow-hidden p-2 space-y-2 animate-fade-in select-none">
+    <div className="flex-1 flex flex-col justify-start overflow-hidden p-2 space-y-2 animate-fade-in select-text">
       {/* Upper Area: Availability & Quote Engine */}
       <div className="space-y-2 shrink-0">
         <div className="bg-white border border-slate-200 rounded p-2 shadow-2xs space-y-2">
@@ -223,7 +221,6 @@ export const ReservationsPage: React.FC = () => {
             >
               <Search className="w-2.5 h-2.5" />
               <span>Check Vehicle Availability</span>
-              <span className="bg-blue-500 text-white text-[8px] px-1 rounded font-bold">7 Filters</span>
             </button>
             <button
               onClick={() => triggerNotice('Quote emailed to customer!')}
@@ -234,10 +231,10 @@ export const ReservationsPage: React.FC = () => {
             </button>
             <button
               onClick={handleCreateBooking}
-              disabled={isBusy}
-              className="px-2 py-0.5 bg-white border border-slate-300 hover:bg-slate-50 disabled:opacity-60 text-slate-700 rounded font-semibold flex items-center space-x-1"
+              className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded font-bold flex items-center space-x-1.5 shadow-2xs transition-all cursor-pointer"
+              title="Open Create Booking modal with Speed Auto ERP payload"
             >
-              <CalendarPlus className="w-2.5 h-2.5 text-slate-500" />
+              <CalendarPlus className="w-3 h-3 text-white" />
               <span>Create Booking</span>
             </button>
             <button

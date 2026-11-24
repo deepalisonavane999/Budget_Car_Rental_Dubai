@@ -280,6 +280,7 @@ export interface ChargeSettingItem {
   rateTypeId: number | null;
   isMandatory: boolean;
   taxable: boolean;
+  applyOnClosing?: boolean;
   chargesType?: {
     id: number;
     name: string;
@@ -427,8 +428,21 @@ export class BudgetApiService {
     email?: string;
   }): Promise<ApiResponse<CustomerDetailResult>> {
     const payload: Record<string, any> = {};
-    if (params.mobileNo) payload.MobileNo = params.mobileNo;
-    if (params.email) payload.Email = params.email;
+    if (params.mobileNo) {
+      let m = params.mobileNo;
+      // If it starts with a space (due to unencoded '+' in URL query params decoded as space), restore '+'
+      if (m.startsWith(' ')) {
+        m = '+' + m.trim();
+      } else {
+        m = m.trim();
+      }
+      // If standard UAE 12-digit number starting with 971 without '+', prepend '+'
+      if (/^971\d+$/.test(m)) {
+        m = '+' + m;
+      }
+      payload.MobileNo = m;
+    }
+    if (params.email) payload.Email = params.email.trim();
     return this.request<CustomerDetailResult>('GetCustomerDetailByEmailOrMobileNo', payload);
   }
 
@@ -530,9 +544,9 @@ export class BudgetApiService {
       CustomerId: validCustomerId,
       BookingConfirmationNumber: params.bookingConfirmationNumber ?? '',
       BookingStatus: params.status || (params.bookingNo ? 'NA' : 'Closed'),
-      FromDate: params.fromDate || '2000-12-11T16:00:00',
-      ToDate: params.toDate || '2026-12-13T15:59:00',
     };
+    if (params.fromDate) payload.FromDate = params.fromDate;
+    if (params.toDate) payload.ToDate = params.toDate;
     if (params.bookingNo) payload.BookingNo = params.bookingNo;
     return this.request<{ totalCount: number; items: BookingItem[] }>(
       'GetBookingByDifferentFilters',
@@ -557,9 +571,9 @@ export class BudgetApiService {
       ManualAgreementNo: params.manualAgreementNo ?? '',
       CustomerId: validCustomerId,
       Status: params.status || (params.agreementNo ? 'NA' : 'Open'),
-      FromDate: params.fromDate || '2000-12-11T16:00:00',
-      ToDate: params.toDate || '2026-12-13T15:59:00',
     };
+    if (params.fromDate) payload.FromDate = params.fromDate;
+    if (params.toDate) payload.ToDate = params.toDate;
     if (params.agreementNo) payload.AgreementNo = params.agreementNo;
     return this.request<{ totalCount: number; items: AgreementItem[] }>(
       'GetAgreementByDifferentFilters',

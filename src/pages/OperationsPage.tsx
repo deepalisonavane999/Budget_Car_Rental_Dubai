@@ -231,7 +231,7 @@ export const OperationsPage: React.FC = () => {
             <div className="col-span-4 flex items-center justify-end space-x-1">
               <button
                 onClick={async () => {
-                  const res = await fetchVehicleAccident(activeRental.vehicle.plateNo || '32849-EE-DXB');
+                  const res = await fetchVehicleAccident(activeRental.vehicle.plateNo || '');
                   showToast(`Dispatch requested! (${res.message})`);
                 }}
                 className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded font-semibold text-[10px] flex items-center space-x-1"

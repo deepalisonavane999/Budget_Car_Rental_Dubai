@@ -1,9 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { MoreHorizontal, ChevronRight, FileText, Car, CalendarPlus, CheckCircle2 } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { Badge } from '../components/common/Badge';
 import { CommunicationDock } from '../components/communication/CommunicationDock';
-import { apiService } from '../services/apiService';
 import { useNavigate } from 'react-router-dom';
 
 export const RentalsPage: React.FC = () => {
@@ -11,6 +10,7 @@ export const RentalsPage: React.FC = () => {
     customer,
     activeRental,
     previousRental,
+    billingSummary,
     commMode,
     setIsExtensionOpen,
     setIsReturnOpen,
@@ -19,40 +19,12 @@ export const RentalsPage: React.FC = () => {
   const navigate = useNavigate();
   const [agreementModalOpen, setAgreementModalOpen] = useState(false);
 
-  // Live Deposit Information from GetDeposit API
-  const [depositAmount, setDepositAmount] = useState<number>(previousRental.depositAmount || 1000);
-  const [depositStatus, setDepositStatus] = useState<string>('Refunded (Processing)');
-
-  useEffect(() => {
-    const fetchDeposit = async () => {
-      const cleanId =
-        customer.id && customer.id !== '—'
-          ? parseInt(String(customer.id).replace(/\D/g, ''), 10)
-          : undefined;
-
-      if (cleanId && cleanId > 0) {
-        try {
-          const res = await apiService.getDeposit({ customerId: cleanId });
-          if (res.success && res.result?.items && res.result.items.length > 0) {
-            const first = res.result.items[0];
-            if (first.amount) setDepositAmount(first.amount);
-            if (first.statusName === 'Settled' || first.amountRefunded > 0) {
-              setDepositStatus('Refunded (Processing)');
-            } else if (first.statusText) {
-              setDepositStatus(first.statusText);
-            }
-          }
-        } catch {
-          // ignore
-        }
-      }
-    };
-
-    fetchDeposit();
-  }, [customer.id]);
+  // Deposit Information from rental or billing summary without extra on-load API calls
+  const depositAmount = previousRental.depositAmount || billingSummary.securityDeposit || 1000;
+  const depositStatus = previousRental.depositStatus || billingSummary.refundStatus || 'Refunded (Processing)';
 
   return (
-    <div className="flex-1 flex flex-col justify-start overflow-hidden p-2 space-y-2 animate-fade-in select-none">
+    <div className="flex-1 flex flex-col justify-start overflow-hidden p-2 space-y-2 animate-fade-in select-text">
       {/* Upper Area: Rental Agreement Cards */}
       <div className="space-y-2 shrink-0">
         {/* 1. Active Rental Card */}

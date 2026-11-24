@@ -173,7 +173,7 @@ export const VoucherExplorer: React.FC<VoucherExplorerProps> = ({ customerId }) 
               <tr>
                 <td colSpan={7} className="py-6 text-center text-slate-400">
                   {loading
-                    ? 'Querying vouchers from Speed API...'
+                    ? 'Loading vouchers...'
                     : queryVal
                     ? `No vouchers returned from API for Customer ID "${queryVal}".`
                     : 'No customer record loaded.'}

@@ -63,7 +63,7 @@ export const InvoiceExplorer: React.FC = () => {
           <FileText className="w-4 h-4 text-blue-600" />
           <div>
             <h3 className="font-bold text-slate-900 text-xs">Invoice Explorer</h3>
-            <p className="text-[10px] text-slate-400">Query and inspect official customer tax invoices</p>
+            <p className="text-[10px] text-slate-400">View and inspect official customer tax invoices</p>
           </div>
         </div>
 

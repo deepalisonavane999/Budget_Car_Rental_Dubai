@@ -30,6 +30,7 @@ export const NavigationTabs: React.FC = () => {
     customer,
     searchBookingOrAgreement,
     executeBookingFilter,
+    executeAgreementFilter,
     isSearchingBooking,
   } = useWorkspace();
 
@@ -40,10 +41,10 @@ export const NavigationTabs: React.FC = () => {
   // Billing Booking Filter & Search State
   const [bookingQuery, setBookingQuery] = useState('');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
-  const [filterStatus, setFilterStatus] = useState<string>('NA');
+  const [filterStatus, setFilterStatus] = useState<string>();
   const [filterCustomerId, setFilterCustomerId] = useState<string>('');
-  const [filterFromDate, setFilterFromDate] = useState('2020-01-01');
-  const [filterToDate, setFilterToDate] = useState('2026-12-31');
+  const [filterFromDate, setFilterFromDate] = useState<any>();
+  const [filterToDate, setFilterToDate] = useState<any>();
   const [bookingFeedback, setBookingFeedback] = useState<string | null>(null);
 
   const filterRef = useRef<HTMLDivElement>(null);
@@ -94,7 +95,7 @@ export const NavigationTabs: React.FC = () => {
     resetCustomer();
   };
 
-  // Booking Lookup & Filter
+  // Booking Lookup & Filter (for Billing / Reservations)
   const handleBookingSearchSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = bookingQuery.trim();
@@ -104,24 +105,40 @@ export const NavigationTabs: React.FC = () => {
     }
 
     setBookingFeedback(null);
-    const res = await searchBookingOrAgreement(trimmed);
+    const parsedId = parseInt(filterCustomerId.trim(), 10);
+    const validCustomerId =
+      !isNaN(parsedId) && parsedId > 0
+        ? parsedId
+        : customer.id && customer.id !== '—'
+        ? parseInt(String(customer.id).replace(/\D/g, ''), 10)
+        : undefined;
+
+    window.dispatchEvent(new CustomEvent('billing:show-bookings'));
+    const res = await executeBookingFilter({
+      customerId: validCustomerId,
+      bookingNo: trimmed,
+    });
     setBookingFeedback(res.message);
-    // Also execute filter to refresh results
-    executeBookingFilter({ bookingNo: trimmed });
     setTimeout(() => setBookingFeedback(null), 4000);
   };
 
   const handleApplyFilters = async () => {
     setBookingFeedback(null);
     const parsedId = parseInt(filterCustomerId.trim(), 10);
-    const validCustomerId = !isNaN(parsedId) && parsedId > 0 ? parsedId : 0;
+    const validCustomerId =
+      !isNaN(parsedId) && parsedId > 0
+        ? parsedId
+        : customer.id && customer.id !== '—'
+        ? parseInt(String(customer.id).replace(/\D/g, ''), 10)
+        : undefined;
 
+    window.dispatchEvent(new CustomEvent('billing:show-bookings'));
     const res = await executeBookingFilter({
       customerId: validCustomerId,
       bookingNo: bookingQuery.trim() || undefined,
-      status: filterStatus,
-      fromDate: `${filterFromDate}T00:00:00`,
-      toDate: `${filterToDate}T23:59:59`,
+      status: filterStatus && filterStatus !== 'NA' && filterStatus !== 'all' ? filterStatus : undefined,
+      fromDate: filterFromDate ? `${filterFromDate}T00:00:00` : undefined,
+      toDate: filterToDate ? `${filterToDate}T23:59:59` : undefined,
     });
 
     setBookingFeedback(res.message);
@@ -207,7 +224,7 @@ export const NavigationTabs: React.FC = () => {
                     ? 'bg-blue-50 border-blue-300 text-blue-600'
                     : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-50'
                 }`}
-                title="Open Booking Filters (GetBookingByDifferentFilters)"
+                title="Filter Bookings"
               >
                 <SlidersHorizontal className="w-2.5 h-2.5" />
                 <span>Filter</span>

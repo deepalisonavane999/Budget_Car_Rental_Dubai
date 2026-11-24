@@ -12,7 +12,8 @@ export const AccidentReportView: React.FC = () => {
   const { customer, activeRental, previousRental } = useWorkspace();
   const [searchParams] = useSearchParams();
   const urlPlate = searchParams.get('plate');
-  const defaultPlate = urlPlate || activeRental?.vehicle?.plateNo || previousRental?.vehicle?.plateNo || '32849-EE-DXB';
+  const urlCustId = searchParams.get('customerId');
+  const defaultPlate = urlPlate || activeRental?.vehicle?.plateNo || previousRental?.vehicle?.plateNo || '';
 
   const [plateQuery, setPlateQuery] = useState(defaultPlate);
   const [loading, setLoading] = useState(false);
@@ -24,8 +25,15 @@ export const AccidentReportView: React.FC = () => {
     setLoading(true);
     setFeedback(null);
     try {
+      const parsedCustId = urlCustId
+        ? parseInt(urlCustId, 10)
+        : customer.id && customer.id !== '—'
+        ? parseInt(String(customer.id).replace(/\D/g, ''), 10)
+        : undefined;
+
       const res = await apiService.getAccident({
         plateNo: targetPlate.trim(),
+        customerId: parsedCustId && !isNaN(parsedCustId) ? parsedCustId : undefined,
       });
       if (res.success && res.result) {
         setAccidentRecord(res.result);
@@ -35,7 +43,7 @@ export const AccidentReportView: React.FC = () => {
       }
     } catch {
       setAccidentRecord(null);
-      setFeedback('Unable to query accident records right now.');
+      setFeedback('Unable to load accident records right now.');
     } finally {
       setLoading(false);
     }

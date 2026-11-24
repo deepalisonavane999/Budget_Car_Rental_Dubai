@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   X,
   Car,
@@ -103,50 +103,46 @@ export const VehicleFleetPickerModal: React.FC = () => {
     }
   };
 
-  // Fetch Fleet Vehicles for selected group or across all groups
-  const fetchFleetVehicles = async (groupId: number | 'all', currentGroups?: VehicleGroupItem[]) => {
+  // Vehicle in-memory cache to prevent duplicate network calls
+  const vehicleCacheRef = useRef<Map<string | number, VehicleItem[]>>(new Map());
+  const isFetchingRef = useRef<boolean>(false);
+
+  // Fetch Fleet Vehicles for selected group or primary fleet (EXACTLY ONE API call)
+  const fetchFleetVehicles = async (
+    groupId: number | 'all',
+    currentGroups?: VehicleGroupItem[],
+    forceRefresh: boolean = false
+  ) => {
+    // Return cached results if already loaded for this group unless force refresh
+    if (!forceRefresh && vehicleCacheRef.current.has(groupId)) {
+      setVehicles(vehicleCacheRef.current.get(groupId) || []);
+      return;
+    }
+
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
     setLoadingVehicles(true);
+
     try {
-      if (groupId === 'all') {
-        // First try querying without group ID
-        const res = await apiService.getVehicles({ pageNumber: 1 });
-        if (res.success && res.result?.items && res.result.items.length > 0) {
-          setVehicles(res.result.items);
-        } else {
-          // If backend requires VehicleGroupId, query active groups in parallel
-          const grps = currentGroups && currentGroups.length > 0 ? currentGroups : vehicleGroups;
-          const targetIds =
-            grps.length > 0 ? grps.slice(0, 10).map((g) => g.id) : [31, 30, 26, 32, 33, 34, 35, 107];
-          const responses = await Promise.all(
-            targetIds.map((gid) =>
-              apiService.getVehicles({ vehicleGroupId: gid, pageNumber: 1 }).catch(() => null)
-            )
-          );
-          const combined: VehicleItem[] = [];
-          const seen = new Set<string>();
-          responses.forEach((r) => {
-            if (r && r.success && r.result?.items) {
-              r.result.items.forEach((item) => {
-                if (item.plateNo && !seen.has(item.plateNo)) {
-                  seen.add(item.plateNo);
-                  combined.push(item);
-                }
-              });
-            }
-          });
-          setVehicles(combined);
-        }
+      const grps = currentGroups && currentGroups.length > 0 ? currentGroups : vehicleGroups;
+      // When 'all' is selected, query the primary fleet group (group 31 or first available group)
+      const targetGid =
+        groupId === 'all'
+          ? (grps.find((g) => g.id === 31)?.id || grps[0]?.id || 31)
+          : Number(groupId);
+
+      // EXACTLY ONE API call
+      const res = await apiService.getVehicles({ vehicleGroupId: targetGid, pageNumber: 1 });
+      if (res.success && res.result?.items && res.result.items.length > 0) {
+        vehicleCacheRef.current.set(groupId, res.result.items);
+        setVehicles(res.result.items);
       } else {
-        const res = await apiService.getVehicles({ vehicleGroupId: Number(groupId), pageNumber: 1 });
-        if (res.success && res.result?.items && res.result.items.length > 0) {
-          setVehicles(res.result.items);
-        } else {
-          setVehicles([]);
-        }
+        setVehicles([]);
       }
     } catch {
       setVehicles([]);
     } finally {
+      isFetchingRef.current = false;
       setLoadingVehicles(false);
     }
   };
@@ -162,7 +158,7 @@ export const VehicleFleetPickerModal: React.FC = () => {
             fetchFleetVehicles(selectedGroupId, res.result.items);
           }
         });
-      } else {
+      } else if (vehicles.length === 0) {
         fetchFleetVehicles(selectedGroupId, vehicleGroups);
       }
 
@@ -177,7 +173,7 @@ export const VehicleFleetPickerModal: React.FC = () => {
         setAvailableLocations(locations);
       }
     }
-  }, [isFleetPickerOpen, selectedGroupId]);
+  }, [isFleetPickerOpen]);
 
   // Derived list of unique branches from vehicles + reference locations
   const allBranches = useMemo(() => {
@@ -324,32 +320,30 @@ export const VehicleFleetPickerModal: React.FC = () => {
       plateNo: veh.plateNo,
       rate: 145,
     });
-
-    setIsFleetPickerOpen(false);
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-3 select-none animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-3 animate-fade-in">
       <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-4xl overflow-hidden flex flex-col max-h-[92vh]">
         
         {/* Header */}
-        <div className="px-5 py-3 bg-gradient-to-r from-slate-900 to-slate-800 text-white flex items-center justify-between shrink-0 shadow-xs">
+        <div className="px-5 py-3 bg-gradient-to-r from-blue-700 to-blue-600 text-white flex items-center justify-between shrink-0 shadow-xs">
           <div className="flex items-center space-x-2.5">
-            <div className="w-8 h-8 rounded-lg bg-blue-600/30 border border-blue-400/30 flex items-center justify-center text-blue-400">
+            <div className="w-8 h-8 rounded-lg bg-white/15 border border-white/20 flex items-center justify-center text-white">
               <Car className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="font-bold text-sm tracking-tight">
+              <h3 className="font-bold text-sm tracking-tight text-white">
                 Reservation & Vehicle Availability Search
               </h3>
-              <p className="text-[11px] text-slate-400">
+              <p className="text-[11px] text-blue-100">
                 Search available vehicles by Branch, Registration Status, Plate, Model, Fleet, Chassis, and Group
               </p>
             </div>
           </div>
           <button
             onClick={() => setIsFleetPickerOpen(false)}
-            className="text-slate-400 hover:text-white p-1.5 hover:bg-white/10 rounded-lg transition-colors"
+            className="text-blue-100 hover:text-white p-1.5 hover:bg-white/15 rounded-lg transition-colors cursor-pointer"
             title="Close modal"
           >
             <X className="w-4 h-4" />
@@ -389,6 +383,21 @@ export const VehicleFleetPickerModal: React.FC = () => {
                   <option value={selectedGroupId}>Loading groups...</option>
                 )}
               </select>
+
+              <button
+                type="button"
+                onClick={() => fetchFleetVehicles(selectedGroupId, undefined, true)}
+                disabled={loadingVehicles}
+                className="px-3 py-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium rounded-md text-xs flex items-center space-x-1.5 transition-colors shadow-2xs cursor-pointer"
+                title="Search fleet vehicles from Speed Auto ERP"
+              >
+                {loadingVehicles ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Search className="w-3.5 h-3.5" />
+                )}
+                <span>{loadingVehicles ? 'Searching...' : 'Search'}</span>
+              </button>
             </div>
 
             <div className="flex items-center space-x-2">
@@ -536,7 +545,7 @@ export const VehicleFleetPickerModal: React.FC = () => {
           {loadingVehicles ? (
             <div className="py-16 text-center text-slate-500 space-y-2.5">
               <RefreshCw className="w-7 h-7 animate-spin mx-auto text-blue-600" />
-              <p className="font-semibold text-sm">Querying Fleet Inventory...</p>
+              <p className="font-semibold text-sm">Loading Fleet Inventory...</p>
               <p className="text-xs text-slate-400">Filtering vehicles across branch and group allocations</p>
             </div>
           ) : filteredVehicles.length === 0 ? (
@@ -578,8 +587,13 @@ export const VehicleFleetPickerModal: React.FC = () => {
                 return (
                   <div
                     key={`${veh.fleetCode}-${veh.plateNo}`}
-                    onClick={() => handleSelectCar(veh)}
-                    className={`p-3.5 rounded-xl border transition-all cursor-pointer flex flex-col justify-between space-y-2.5 bg-white shadow-2xs hover:shadow-md ${
+                    onClick={() => {
+                      if (window.getSelection()?.toString().trim()) {
+                        return;
+                      }
+                      handleSelectCar(veh);
+                    }}
+                    className={`p-3.5 rounded-xl border transition-all select-text flex flex-col justify-between space-y-2.5 bg-white shadow-2xs hover:shadow-md ${
                       isCurrentActive
                         ? 'border-blue-600 ring-2 ring-blue-500/20 bg-blue-50/30'
                         : 'border-slate-200 hover:border-blue-400'
@@ -587,35 +601,35 @@ export const VehicleFleetPickerModal: React.FC = () => {
                   >
                     {/* Top Row: Title, Group & Rate */}
                     <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
+                      <div className="min-w-0 flex-1 select-text">
                         <div className="flex items-center space-x-1.5 mb-0.5">
-                          <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 font-bold rounded text-[9px]">
+                          <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 font-bold rounded text-[9px] select-text">
                             {vehicleCategory}
                           </span>
-                          <span className="text-[10px] text-slate-500 font-medium">
+                          <span className="text-[10px] text-slate-500 font-medium select-text">
                             Year {veh.modelYear || '2026'}
                           </span>
                           {veh.exteriorColor && (
-                            <span className="text-[10px] text-slate-400 font-medium">
+                            <span className="text-[10px] text-slate-400 font-medium select-text">
                               • {veh.exteriorColor}
                             </span>
                           )}
                         </div>
                         <h4
-                          className="font-bold text-slate-900 text-xs leading-tight line-clamp-1"
+                          className="font-bold text-slate-900 text-xs leading-tight line-clamp-1 select-text cursor-text"
                           title={vehicleTitle}
                         >
                           {vehicleTitle}
                         </h4>
                       </div>
 
-                      <div className="text-right shrink-0">
-                        <span className="font-mono font-bold text-blue-600 text-xs block">
+                      <div className="text-right shrink-0 select-text">
+                        <span className="font-mono font-bold text-blue-600 text-xs block select-text">
                           AED 145<span className="text-[9px] text-slate-400 font-normal">/day</span>
                         </span>
                         <Badge
                           variant={veh.status === 'Available' || veh.statusId === 'IDL' ? 'green' : 'amber'}
-                          className="text-[8px] py-0 px-1 inline-block mt-0.5"
+                          className="text-[8px] py-0 px-1 inline-block mt-0.5 select-text"
                         >
                           {veh.status || veh.statusId || 'Available'}
                         </Badge>
@@ -623,23 +637,23 @@ export const VehicleFleetPickerModal: React.FC = () => {
                     </div>
 
                     {/* Middle Row: Plate, Fleet, VIN / Chassis */}
-                    <div className="bg-slate-50 p-2 rounded-lg border border-slate-100 grid grid-cols-3 gap-1.5 text-[10px]">
+                    <div className="bg-slate-50 p-2 rounded-lg border border-slate-100 grid grid-cols-3 gap-1.5 text-[10px] select-text">
                       <div>
                         <span className="text-[8px] text-slate-400 block font-semibold uppercase">Plate Number</span>
-                        <span className="font-mono font-bold text-slate-900 bg-white px-1.5 py-0.5 rounded border border-slate-200 inline-block shadow-2xs">
+                        <span className="font-mono font-bold text-slate-900 bg-white px-1.5 py-0.5 rounded border border-slate-200 inline-block shadow-2xs select-text cursor-text">
                           {veh.plateNo}
                         </span>
                       </div>
                       <div>
                         <span className="text-[8px] text-slate-400 block font-semibold uppercase">Fleet ID</span>
-                        <span className="font-mono font-semibold text-slate-700 block">
+                        <span className="font-mono font-semibold text-slate-700 block select-text cursor-text">
                           #{veh.fleetCode}
                         </span>
                       </div>
                       <div>
                         <span className="text-[8px] text-slate-400 block font-semibold uppercase">Chassis (VIN)</span>
                         <span
-                          className="font-mono text-slate-700 block truncate"
+                          className="font-mono text-slate-700 block truncate select-text cursor-text"
                           title={veh.chassisNo || 'No Chassis Number'}
                         >
                           {veh.chassisNo ? veh.chassisNo : '—'}
