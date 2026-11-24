@@ -18,6 +18,12 @@ const OperationsPage = lazy(() =>
 const CasesPage = lazy(() =>
   import('../pages/CasesPage').then((m) => ({ default: m.CasesPage }))
 );
+const CXPulsePage = lazy(() =>
+  import('../pages/CXPulsePage').then((m) => ({ default: m.CXPulsePage }))
+);
+const FunnelFlowPage = lazy(() =>
+  import('../pages/FunnelFlowPage').then((m) => ({ default: m.FunnelFlowPage }))
+);
 
 const RedirectToRentals: React.FC = () => {
   const location = useLocation();
@@ -35,6 +41,8 @@ export const AppRoutes: React.FC = () => {
         <Route path="billing" element={<BillingPage />} />
         <Route path="operations" element={<OperationsPage />} />
         <Route path="cases" element={<CasesPage />} />
+        <Route path="cx-pulse" element={<CXPulsePage />} />
+        <Route path="funnel-flow" element={<FunnelFlowPage />} />
         {/* Catch-all redirect to rentals to avoid 404 on refresh, preserving search query */}
         <Route path="*" element={<RedirectToRentals />} />
       </Route>

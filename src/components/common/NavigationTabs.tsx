@@ -13,6 +13,8 @@ import {
   SlidersHorizontal,
   ChevronDown,
   ArrowRight,
+  Activity,
+  GitFork,
 } from 'lucide-react';
 import { useWorkspace } from '../../context/WorkspaceContext';
 import { apiService, BookingItem } from '../../services/apiService';
@@ -78,6 +80,8 @@ export const NavigationTabs: React.FC = () => {
     { id: 'billing', label: 'Billing', icon: CreditCard },
     { id: 'operations', label: 'Operations', icon: Settings },
     { id: 'cases', label: 'Cases', icon: FolderCheck },
+    { id: 'cx-pulse', label: 'CX Pulse', icon: Activity },
+    { id: 'funnel-flow', label: 'Funnel Flow', icon: GitFork },
   ];
 
   // Standard Customer Search

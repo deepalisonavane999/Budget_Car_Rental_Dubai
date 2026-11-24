@@ -368,9 +368,15 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const toggleRightSidebar = () => setIsRightSidebarOpen((prev) => !prev);
 
   const currentPath = location.pathname.replace('/', '') || 'rentals';
-  const activeNavTab = ['rentals', 'reservations', 'billing', 'operations', 'cases'].includes(
-    currentPath
-  )
+  const activeNavTab = [
+    'rentals',
+    'reservations',
+    'billing',
+    'operations',
+    'cases',
+    'cx-pulse',
+    'funnel-flow',
+  ].includes(currentPath)
     ? currentPath
     : 'rentals';
 

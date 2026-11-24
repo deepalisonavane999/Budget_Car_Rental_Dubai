@@ -1,0 +1,93 @@
+{
+  "info": {
+    "_postman_id": "4bce32e4-9a10-4ab4-b47f-af1191416169",
+    "name": "AGMC Interface - CXPulse",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "19064824"
+  },
+  "item": [
+    {
+      "name": "Create ticket",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "X-API-Key",
+            "value": "sk-TqK7DAFxyt6jMTbY0jemlZtkjdzmPMAJnoQvLx6xqoA"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"subject\": \"Test complaint\",\r\n    \"description\": \"From the web form\",\r\n    \"customerName\": \"Ahmed\",\r\n    \"priority\": \"high\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "https://cxpulse.agmcgroup.ae/api/integration/v1/tickets",
+          "protocol": "https",
+          "host": [
+            "cxpulse",
+            "agmcgroup",
+            "ae"
+          ],
+          "path": [
+            "api",
+            "integration",
+            "v1",
+            "tickets"
+          ],
+          "query": [
+            {
+              "key": "X-API-Key",
+              "value": "sk-qlwM0suxUq7FA501YOc0xR1AQXxVELzpBKbJQPJn",
+              "disabled": true
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Ticket status",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-API-Key",
+            "value": "sk-TqK7DAFxyt6jMTbY0jemlZtkjdzmPMAJnoQvLx6xqoA"
+          }
+        ],
+        "url": {
+          "raw": "https://cxpulse.agmcgroup.ae/api/integration/v1/tickets/TKT-2026-09-0003",
+          "protocol": "https",
+          "host": [
+            "cxpulse",
+            "agmcgroup",
+            "ae"
+          ],
+          "path": [
+            "api",
+            "integration",
+            "v1",
+            "tickets",
+            "TKT-2026-09-0003"
+          ]
+        }
+      },
+      "response": []
+    }
+  ],
+  "auth": {
+    "type": "apikey",
+    "apikey": [
+      {
+        "key": "key",
+        "value": "cxp_JMvbX3fu2kPQyKHxeVyM8Hb09XJaDCvq0CjQTqgaJKY",
+        "type": "string"
+      }
+    ]
+  }
+}

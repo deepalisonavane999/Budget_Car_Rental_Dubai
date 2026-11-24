@@ -659,6 +659,112 @@ export class BudgetApiService {
       { PageNumber: pageNumber, pageSize }
     );
   }
+
+  /**
+   * CXPulse Integration APIs
+   */
+  public async createCXPulseTicket(payload: {
+    customerName: string;
+    subject: string;
+    description: string;
+    priority: 'low' | 'medium' | 'high';
+  }): Promise<{ success: boolean; data?: any; error?: string }> {
+    // Keys from Postman collection: request header key + collection auth key
+    const candidateKeys = [
+      'sk-TqK7DAFxyt6jMTbY0jemlZtkjdzmPMAJnoQvLx6xqoA',
+      'cxp_JMvbX3fu2kPQyKHxeVyM8Hb09XJaDCvq0CjQTqgaJKY',
+    ];
+
+    const endpoint = import.meta.env.DEV
+      ? '/cxpulse-api/api/integration/v1/tickets'
+      : 'https://cxpulse.agmcgroup.ae/api/integration/v1/tickets';
+
+    let lastError = '';
+    let lastData = null;
+
+    for (const apiKey of candidateKeys) {
+      try {
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-API-Key': apiKey,
+          },
+          body: JSON.stringify(payload),
+        });
+
+        const data = await res.json().catch(() => null);
+        console.log(`[CXPulse] Key ${apiKey.substring(0, 10)}... status:`, res.status, data);
+
+        if (res.ok) {
+          return {
+            success: true,
+            data,
+          };
+        }
+
+        lastError = data?.message || data?.error || `HTTP ${res.status}: Failed to create ticket`;
+        lastData = data;
+
+        // If 401 or 403, attempt with next key
+        if (res.status === 401 || res.status === 403) {
+          continue;
+        }
+
+        return {
+          success: false,
+          error: lastError,
+          data: lastData,
+        };
+      } catch (err: any) {
+        lastError = err.message || 'Network error connecting to CXPulse API';
+      }
+    }
+
+    return {
+      success: false,
+      error: lastError || 'Failed to create ticket in CXPulse',
+      data: lastData,
+    };
+  }
+
+  public async getCXPulseTicketStatus(
+    ticketId: string
+  ): Promise<{ success: boolean; data?: any; error?: string }> {
+    const apiKey = 'cxp_JMvbX3fu2kPQyKHxeVyM8Hb09XJaDCvq0CjQTqgaJKY';
+    const endpoint = import.meta.env.DEV
+      ? `/cxpulse-api/api/integration/v1/tickets/${encodeURIComponent(ticketId)}`
+      : `https://cxpulse.agmcgroup.ae/api/integration/v1/tickets/${encodeURIComponent(ticketId)}`;
+
+    try {
+      const res = await fetch(endpoint, {
+        method: 'GET',
+        headers: {
+          'X-API-Key': apiKey,
+        },
+      });
+
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        return {
+          success: false,
+          error: data?.message || data?.error || `HTTP ${res.status}: Failed to fetch ticket`,
+          data,
+        };
+      }
+
+      return {
+        success: true,
+        data,
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        error: err.message || 'Network error fetching ticket status',
+      };
+    }
+  }
 }
 
 export const apiService = new BudgetApiService();

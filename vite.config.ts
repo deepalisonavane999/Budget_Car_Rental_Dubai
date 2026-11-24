@@ -21,6 +21,20 @@ export default defineConfig({
         secure: true,
         rewrite: (p) => p.replace(/^\/speed-api/, '/api'),
       },
+      '/cxpulse-api': {
+        target: 'https://cxpulse.agmcgroup.ae',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (p) => p.replace(/^\/cxpulse-api/, ''),
+        configure: (proxy) => {
+          proxy.on('proxyReq', (proxyReq) => {
+            proxyReq.removeHeader('origin');
+            proxyReq.removeHeader('referer');
+            proxyReq.setHeader('Host', 'cxpulse.agmcgroup.ae');
+            proxyReq.setHeader('User-Agent', 'PostmanRuntime/7.39.0');
+          });
+        },
+      },
     },
   },
 });
