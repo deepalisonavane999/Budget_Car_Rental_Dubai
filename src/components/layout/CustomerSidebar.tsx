@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   CheckCircle2,
   ExternalLink,
@@ -7,6 +7,8 @@ import {
   RefreshCw,
   CreditCard,
   MapPin,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { useWorkspace } from '../../context/WorkspaceContext';
 import { useNavigate } from 'react-router-dom';
@@ -53,6 +55,14 @@ export const CustomerSidebar: React.FC = () => {
     setActiveNavTab,
   } = useWorkspace();
   const navigate = useNavigate();
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+
+  const copyToClipboard = (text: string | null | undefined, fieldName: string) => {
+    if (!text || text === '—') return;
+    navigator.clipboard.writeText(String(text).trim());
+    setCopiedField(fieldName);
+    setTimeout(() => setCopiedField(null), 2000);
+  };
 
   // Collapsed Sleek Mini-Rail View
   if (!isLeftSidebarOpen) {
@@ -115,21 +125,21 @@ export const CustomerSidebar: React.FC = () => {
       : '—';
 
   return (
-    <aside className="w-56 xl:w-60 bg-white border-r border-slate-200 flex flex-col justify-start shrink-0 select-none overflow-hidden transition-all duration-200 ease-in-out z-10">
+    <aside className="w-56 xl:w-60 bg-white border-r border-slate-200 flex flex-col justify-start shrink-0 select-text overflow-hidden transition-all duration-200 ease-in-out z-10">
       <div className="p-2.5 space-y-1.5 w-56 xl:w-60">
         {/* Header */}
-        <div className="flex items-center justify-between pb-1 border-b border-slate-100">
+        <div className="flex items-center justify-between pb-1 border-b border-slate-100 select-none">
           <div className="flex items-center space-x-1.5">
             <h2 className="text-xs font-bold text-slate-900 tracking-tight">Customer Details</h2>
             <button
               onClick={() => setIsCustomerEditOpen(true)}
-              className="text-[10px] font-semibold text-blue-600 hover:text-blue-800 transition-colors ml-0.5"
+              className="text-[10px] font-semibold text-blue-600 hover:text-blue-800 transition-colors ml-0.5 cursor-pointer"
             >
               Edit
             </button>
             <button
               onClick={() => refreshCustomerData()}
-              className="p-0.5 text-slate-400 hover:text-blue-600 rounded transition-colors"
+              className="p-0.5 text-slate-400 hover:text-blue-600 rounded transition-colors cursor-pointer"
               title="Refresh customer profile"
             >
               <RefreshCw
@@ -140,7 +150,7 @@ export const CustomerSidebar: React.FC = () => {
 
           <button
             onClick={toggleLeftSidebar}
-            className="p-0.5 text-slate-400 hover:text-slate-600 rounded hover:bg-slate-100 transition-colors"
+            className="p-0.5 text-slate-400 hover:text-slate-600 rounded hover:bg-slate-100 transition-colors cursor-pointer"
             title="Collapse Sidebar"
           >
             <ChevronLeft className="w-3.5 h-3.5" />
@@ -149,23 +159,40 @@ export const CustomerSidebar: React.FC = () => {
 
         {/* Profile Header */}
         <div className="flex items-center space-x-2 py-0.5">
-          <div className="w-8 h-8 rounded-full bg-slate-500 text-white font-bold text-[11px] flex items-center justify-center shrink-0 shadow-2xs">
+          <div className="w-8 h-8 rounded-full bg-slate-500 text-white font-bold text-[11px] flex items-center justify-center shrink-0 shadow-2xs select-none">
             {customer.avatarInitials}
           </div>
-          <div className="min-w-0">
-            <h3
-              className="text-xs font-bold text-slate-900 leading-snug truncate"
-              title={customer.name}
-            >
-              {customer.name || '—'}
-            </h3>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center space-x-1 group">
+              <h3
+                className="text-xs font-bold text-slate-900 leading-snug truncate select-text cursor-pointer hover:text-blue-600 transition-colors"
+                title={`${customer.name || ''} (Click to copy)`}
+                onClick={() => copyToClipboard(customer.name, 'name')}
+              >
+                {customer.name || '—'}
+              </h3>
+              {customer.name && customer.name !== '—' && (
+                <button
+                  type="button"
+                  onClick={() => copyToClipboard(customer.name, 'name')}
+                  className="opacity-0 group-hover:opacity-100 p-0.5 text-slate-400 hover:text-blue-600 transition-opacity cursor-pointer shrink-0"
+                  title="Copy Name"
+                >
+                  {copiedField === 'name' ? (
+                    <Check className="w-2.5 h-2.5 text-emerald-600" />
+                  ) : (
+                    <Copy className="w-2.5 h-2.5" />
+                  )}
+                </button>
+              )}
+            </div>
             {customer.isVerified ? (
-              <span className="inline-flex items-center space-x-1 px-1.5 py-0.2 rounded-full text-[9px] font-medium bg-emerald-100 text-emerald-800 mt-0.5">
+              <span className="inline-flex items-center space-x-1 px-1.5 py-0.2 rounded-full text-[9px] font-medium bg-emerald-100 text-emerald-800 mt-0.5 select-none">
                 <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" />
                 <span>Verified Customer</span>
               </span>
             ) : formatCategory(customer.contactCategory) !== '—' ? (
-              <span className="inline-flex items-center px-1.5 py-0.2 rounded-full text-[9px] font-medium bg-slate-100 text-slate-600 mt-0.5">
+              <span className="inline-flex items-center px-1.5 py-0.2 rounded-full text-[9px] font-medium bg-slate-100 text-slate-600 mt-0.5 select-none">
                 {formatCategory(customer.contactCategory)}
               </span>
             ) : null}
@@ -174,67 +201,143 @@ export const CustomerSidebar: React.FC = () => {
 
         {/* Core Profile Fields */}
         <div className="space-y-0.5 text-[10px]">
-          <div className="flex justify-between items-baseline py-0.5 border-b border-slate-50">
-            <span className="text-slate-400">Customer ID</span>
-            <span className="font-semibold text-slate-800 font-mono">{customer.id || '—'}</span>
+          <div className="flex justify-between items-baseline py-0.5 border-b border-slate-50 group">
+            <span className="text-slate-400 select-none">Customer ID</span>
+            <div className="flex items-center space-x-1">
+              <span
+                onClick={() => copyToClipboard(customer.id, 'id')}
+                className="font-semibold text-slate-800 font-mono select-text cursor-pointer hover:text-blue-600 transition-colors"
+                title={`${customer.id} (Click to copy)`}
+              >
+                {customer.id || '—'}
+              </span>
+              {customer.id && customer.id !== '—' && (
+                <button
+                  type="button"
+                  onClick={() => copyToClipboard(customer.id, 'id')}
+                  className="opacity-0 group-hover:opacity-100 p-0.5 text-slate-400 hover:text-blue-600 transition-opacity cursor-pointer shrink-0"
+                  title="Copy Customer ID"
+                >
+                  {copiedField === 'id' ? (
+                    <Check className="w-2.5 h-2.5 text-emerald-600" />
+                  ) : (
+                    <Copy className="w-2.5 h-2.5" />
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="flex justify-between items-baseline py-0.5 border-b border-slate-50 group">
+            <span className="text-slate-400 select-none">Mobile</span>
+            <div className="flex items-center space-x-1">
+              <span
+                onClick={() => copyToClipboard(displayMobile, 'mobile')}
+                className="font-semibold text-slate-800 font-mono truncate max-w-[125px] select-text cursor-pointer hover:text-blue-600 transition-colors"
+                title={`${displayMobile} (Click to copy)`}
+              >
+                {displayMobile}
+              </span>
+              {displayMobile && displayMobile !== '—' && (
+                <button
+                  type="button"
+                  onClick={() => copyToClipboard(displayMobile, 'mobile')}
+                  className="opacity-0 group-hover:opacity-100 p-0.5 text-slate-400 hover:text-blue-600 transition-opacity cursor-pointer shrink-0"
+                  title="Copy Mobile Number"
+                >
+                  {copiedField === 'mobile' ? (
+                    <Check className="w-2.5 h-2.5 text-emerald-600" />
+                  ) : (
+                    <Copy className="w-2.5 h-2.5" />
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="flex justify-between items-baseline py-0.5 border-b border-slate-50 group">
+            <span className="text-slate-400 select-none">Email</span>
+            <div className="flex items-center space-x-1">
+              <span
+                onClick={() => copyToClipboard(displayEmail, 'email')}
+                className="font-medium text-slate-800 truncate max-w-[125px] select-text cursor-pointer hover:text-blue-600 transition-colors"
+                title={`${displayEmail} (Click to copy)`}
+              >
+                {displayEmail}
+              </span>
+              {displayEmail && displayEmail !== '—' && (
+                <button
+                  type="button"
+                  onClick={() => copyToClipboard(displayEmail, 'email')}
+                  className="opacity-0 group-hover:opacity-100 p-0.5 text-slate-400 hover:text-blue-600 transition-opacity cursor-pointer shrink-0"
+                  title="Copy Email"
+                >
+                  {copiedField === 'email' ? (
+                    <Check className="w-2.5 h-2.5 text-emerald-600" />
+                  ) : (
+                    <Copy className="w-2.5 h-2.5" />
+                  )}
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="flex justify-between items-baseline py-0.5 border-b border-slate-50">
-            <span className="text-slate-400">Mobile</span>
-            <span className="font-semibold text-slate-800 font-mono truncate max-w-[130px]" title={displayMobile}>
-              {displayMobile}
-            </span>
-          </div>
-
-          <div className="flex justify-between items-baseline py-0.5 border-b border-slate-50">
-            <span className="text-slate-400">Email</span>
-            <span
-              className="font-medium text-slate-800 truncate max-w-[135px]"
-              title={displayEmail}
-            >
-              {displayEmail}
-            </span>
-          </div>
-
-          <div className="flex justify-between items-baseline py-0.5 border-b border-slate-50">
-            <span className="text-slate-400">Category</span>
-            <span className="font-medium text-slate-800">
+            <span className="text-slate-400 select-none">Category</span>
+            <span className="font-medium text-slate-800 select-text">
               {formatCategory(customer.contactCategory)}
             </span>
           </div>
 
-          <div className="flex justify-between items-baseline py-0.5 border-b border-slate-50">
-            <span className="text-slate-400">Location</span>
-            <span
-              className="font-medium text-slate-800 truncate max-w-[130px]"
-              title={customer.locationName || (customer.locationId ? `ID ${customer.locationId}` : '—')}
-            >
-              {customer.locationName || (customer.locationId ? `#${customer.locationId}` : '—')}
-            </span>
+          <div className="flex justify-between items-baseline py-0.5 border-b border-slate-50 group">
+            <span className="text-slate-400 select-none">Location</span>
+            <div className="flex items-center space-x-1">
+              <span
+                onClick={() => copyToClipboard(customer.locationName || (customer.locationId ? `ID ${customer.locationId}` : ''), 'loc')}
+                className="font-medium text-slate-800 truncate max-w-[125px] select-text cursor-pointer hover:text-blue-600 transition-colors"
+                title={`${customer.locationName || (customer.locationId ? `ID ${customer.locationId}` : '—')} (Click to copy)`}
+              >
+                {customer.locationName || (customer.locationId ? `#${customer.locationId}` : '—')}
+              </span>
+              {customer.locationName && (
+                <button
+                  type="button"
+                  onClick={() => copyToClipboard(customer.locationName || '', 'loc')}
+                  className="opacity-0 group-hover:opacity-100 p-0.5 text-slate-400 hover:text-blue-600 transition-opacity cursor-pointer shrink-0"
+                  title="Copy Location"
+                >
+                  {copiedField === 'loc' ? (
+                    <Check className="w-2.5 h-2.5 text-emerald-600" />
+                  ) : (
+                    <Copy className="w-2.5 h-2.5" />
+                  )}
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-1 py-0.5 border-b border-slate-50">
             <div>
-              <span className="text-slate-400 block text-[9px]">Nationality</span>
-              <span className="font-medium text-slate-800 truncate block">
+              <span className="text-slate-400 block text-[9px] select-none">Nationality</span>
+              <span className="font-medium text-slate-800 truncate block select-text">
                 {customer.nationality || '—'}
               </span>
             </div>
             <div className="text-right">
-              <span className="text-slate-400 block text-[9px]">DOB / Gender</span>
-              <span className="font-medium text-slate-800">
+              <span className="text-slate-400 block text-[9px] select-none">DOB / Gender</span>
+              <span className="font-medium text-slate-800 select-text">
                 {formatDob(customer.dateOfBirth)} • {formatGender(customer.gender)}
               </span>
             </div>
           </div>
 
           <div className="flex justify-between items-center py-0.5 border-b border-slate-50">
-            <span className="text-slate-400">Identity Docs</span>
+            <span className="text-slate-400 select-none">Identity Docs</span>
             {docsCount > 0 ? (
               <button
                 type="button"
                 onClick={() => setIsDocDrawerOpen(true)}
-                className="text-[10px] font-medium text-blue-600 hover:text-blue-800 hover:underline flex items-center space-x-1"
+                className="text-[10px] font-medium text-blue-600 hover:text-blue-800 hover:underline flex items-center space-x-1 cursor-pointer"
                 title="Click to view identity documents"
               >
                 <span>{docsCount} {docsCount === 1 ? 'Doc' : 'Docs'}</span>
@@ -246,14 +349,31 @@ export const CustomerSidebar: React.FC = () => {
           </div>
 
           {/* Address */}
-          <div className="py-0.5 border-b border-slate-50">
-            <div className="flex items-center space-x-1 text-slate-400 text-[9px]">
-              <MapPin className="w-2.5 h-2.5 shrink-0" />
-              <span>Address</span>
+          <div className="py-0.5 border-b border-slate-50 group">
+            <div className="flex items-center justify-between text-slate-400 text-[9px]">
+              <div className="flex items-center space-x-1 select-none">
+                <MapPin className="w-2.5 h-2.5 shrink-0" />
+                <span>Address</span>
+              </div>
+              {formattedAddress && formattedAddress !== '—' && (
+                <button
+                  type="button"
+                  onClick={() => copyToClipboard(formattedAddress, 'addr')}
+                  className="opacity-0 group-hover:opacity-100 p-0.5 text-slate-400 hover:text-blue-600 transition-opacity cursor-pointer shrink-0"
+                  title="Copy Address"
+                >
+                  {copiedField === 'addr' ? (
+                    <Check className="w-2.5 h-2.5 text-emerald-600" />
+                  ) : (
+                    <Copy className="w-2.5 h-2.5" />
+                  )}
+                </button>
+              )}
             </div>
             <p
-              className="text-[10px] font-medium text-slate-700 leading-tight line-clamp-2 mt-0.5"
-              title={formattedAddress || 'No address on file'}
+              onClick={() => copyToClipboard(formattedAddress, 'addr')}
+              className="text-[10px] font-medium text-slate-700 leading-tight line-clamp-2 mt-0.5 select-text cursor-pointer hover:text-blue-600 transition-colors"
+              title={`${formattedAddress || 'No address on file'} (Click to copy)`}
             >
               {formattedAddress || '—'}
             </p>

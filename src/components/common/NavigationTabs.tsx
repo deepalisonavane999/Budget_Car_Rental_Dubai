@@ -43,7 +43,7 @@ export const NavigationTabs: React.FC = () => {
   // Billing Booking Filter & Search State
   const [bookingQuery, setBookingQuery] = useState('');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
-  const [filterStatus, setFilterStatus] = useState<string>();
+  const [filterStatus, setFilterStatus] = useState<string>('NA');
   const [filterCustomerId, setFilterCustomerId] = useState<string>('');
   const [filterFromDate, setFilterFromDate] = useState<any>();
   const [filterToDate, setFilterToDate] = useState<any>();
@@ -65,14 +65,6 @@ export const NavigationTabs: React.FC = () => {
       document.removeEventListener('mousedown', handleOutsideClick);
     };
   }, [isFilterOpen]);
-
-  // Sync customer ID for filter
-  useEffect(() => {
-    if (customer.id && customer.id !== '—') {
-      const clean = String(customer.id).replace(/\D/g, '');
-      if (clean) setFilterCustomerId(clean);
-    }
-  }, [customer.id]);
 
   const tabs = [
     { id: 'rentals', label: 'Rentals', icon: Car },
@@ -110,12 +102,7 @@ export const NavigationTabs: React.FC = () => {
 
     setBookingFeedback(null);
     const parsedId = parseInt(filterCustomerId.trim(), 10);
-    const validCustomerId =
-      !isNaN(parsedId) && parsedId > 0
-        ? parsedId
-        : customer.id && customer.id !== '—'
-        ? parseInt(String(customer.id).replace(/\D/g, ''), 10)
-        : undefined;
+    const validCustomerId = !isNaN(parsedId) && parsedId > 0 ? parsedId : 0;
 
     window.dispatchEvent(new CustomEvent('billing:show-bookings'));
     const res = await executeBookingFilter({
@@ -129,18 +116,14 @@ export const NavigationTabs: React.FC = () => {
   const handleApplyFilters = async () => {
     setBookingFeedback(null);
     const parsedId = parseInt(filterCustomerId.trim(), 10);
-    const validCustomerId =
-      !isNaN(parsedId) && parsedId > 0
-        ? parsedId
-        : customer.id && customer.id !== '—'
-        ? parseInt(String(customer.id).replace(/\D/g, ''), 10)
-        : undefined;
+    // Only pass customerId if explicitly specified; otherwise send 0 (do not auto-inject current customer)
+    const validCustomerId = !isNaN(parsedId) && parsedId > 0 ? parsedId : 0;
 
     window.dispatchEvent(new CustomEvent('billing:show-bookings'));
     const res = await executeBookingFilter({
       customerId: validCustomerId,
       bookingNo: bookingQuery.trim() || undefined,
-      status: filterStatus && filterStatus !== 'NA' && filterStatus !== 'all' ? filterStatus : undefined,
+      status: filterStatus && filterStatus !== 'all' ? filterStatus : 'NA',
       fromDate: filterFromDate ? `${filterFromDate}T00:00:00` : undefined,
       toDate: filterToDate ? `${filterToDate}T23:59:59` : undefined,
     });
@@ -165,8 +148,22 @@ export const NavigationTabs: React.FC = () => {
             <PanelLeftOpen className="w-4 h-4 text-blue-600" />
           )}
         </button>
-        <span className="text-[10px] font-bold tracking-wider text-slate-400 uppercase hidden lg:inline">
-          Customer: <span className="text-slate-800 font-mono">#{customer.id}</span>
+        <span className="text-[10px] font-bold tracking-wider text-slate-400 uppercase hidden lg:inline select-text">
+          Customer:{' '}
+          <span
+            onClick={() => {
+              if (customer.id && customer.id !== '—') {
+                const clean = String(customer.id).replace(/\D/g, '');
+                navigator.clipboard.writeText(clean);
+                setBookingFeedback('ID copied!');
+                setTimeout(() => setBookingFeedback(null), 2000);
+              }
+            }}
+            className="text-slate-800 font-mono select-text cursor-pointer hover:text-blue-600 transition-colors"
+            title="Click to copy Customer ID"
+          >
+            #{customer.id}
+          </span>
         </span>
       </div>
 

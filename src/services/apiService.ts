@@ -547,7 +547,7 @@ export class BudgetApiService {
     const payload: Record<string, any> = {
       CustomerId: validCustomerId,
       BookingConfirmationNumber: params.bookingConfirmationNumber ?? '',
-      BookingStatus: params.status || (params.bookingNo ? 'NA' : 'Closed'),
+      BookingStatus: params.status && params.status !== 'all' ? params.status : 'NA',
     };
     if (params.fromDate) payload.FromDate = params.fromDate;
     if (params.toDate) payload.ToDate = params.toDate;
@@ -574,7 +574,7 @@ export class BudgetApiService {
     const payload: Record<string, any> = {
       ManualAgreementNo: params.manualAgreementNo ?? '',
       CustomerId: validCustomerId,
-      Status: params.status || (params.agreementNo ? 'NA' : 'Open'),
+      Status: params.status && params.status !== 'all' ? params.status : 'NA',
     };
     if (params.fromDate) payload.FromDate = params.fromDate;
     if (params.toDate) payload.ToDate = params.toDate;

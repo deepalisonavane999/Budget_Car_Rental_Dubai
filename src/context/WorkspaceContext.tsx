@@ -60,7 +60,11 @@ interface WorkspaceContextType {
   customerCards: ContactCardItem[];
   updateCustomer: (updated: Partial<CustomerProfile>) => void;
   activeRental: RentalAgreement;
+  setActiveRental: React.Dispatch<React.SetStateAction<RentalAgreement>>;
   previousRental: RentalAgreement;
+  setPreviousRental: React.Dispatch<React.SetStateAction<RentalAgreement>>;
+  updateActiveRental: (updated: Partial<RentalAgreement>) => void;
+  updatePreviousRental: (updated: Partial<RentalAgreement>) => void;
   billingSummary: BillingSummary;
   reservationQuote: ReservationQuote;
   caseDetails: CaseDetails;
@@ -380,6 +384,40 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     setIsCreateBookingOpen(true);
   };
 
+  const updateActiveRental = (updated: Partial<RentalAgreement>) => {
+    setActiveRental((prev) => {
+      const merged = { ...prev, ...updated };
+      if (updated.vehicle) {
+        merged.vehicle = { ...prev.vehicle, ...updated.vehicle };
+      }
+      if (updated.pickupDate || updated.returnDate) {
+        merged.rentalPeriodDays = calcRentalDays(
+          merged.pickupDate,
+          merged.returnDate,
+          merged.rentalPeriodDays || 1
+        );
+      }
+      return merged;
+    });
+  };
+
+  const updatePreviousRental = (updated: Partial<RentalAgreement>) => {
+    setPreviousRental((prev) => {
+      const merged = { ...prev, ...updated };
+      if (updated.vehicle) {
+        merged.vehicle = { ...prev.vehicle, ...updated.vehicle };
+      }
+      if (updated.pickupDate || updated.returnDate) {
+        merged.rentalPeriodDays = calcRentalDays(
+          merged.pickupDate,
+          merged.returnDate,
+          merged.rentalPeriodDays || 1
+        );
+      }
+      return merged;
+    });
+  };
+
   const calcRentalDays = (start?: string | null, end?: string | null, fallback = 1): number => {
     if (!start || !end) return fallback;
     const d1 = new Date(start.replace(' ', 'T')).getTime();
@@ -551,23 +589,25 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             ) || items[0];
 
           if (openAgr) {
-            const [startDt, startTm] = (openAgr.startDate || '').split('T');
-            const [endDt, endTm] = (openAgr.endDate || '').split('T');
+            const [startDt, startTm] = (openAgr.startDate || '').split(/T| /);
+            const [endDt, endTm] = (openAgr.endDate || '').split(/T| /);
+            const days = calcRentalDays(openAgr.startDate, openAgr.endDate, 1);
             const resolvedPlate = (openAgr as any).vehicle?.plateNo || (openAgr as any).plateNo || '';
             setCustomer((prev) => ({ ...prev, activeRentalNo: openAgr.agreementNo }));
             setActiveRental((prev) => ({
               ...prev,
               agreementNo: openAgr.agreementNo,
-              pickupLocation: openAgr.location || openAgr.pickupLocation || '—',
-              returnLocation: openAgr.location || openAgr.pickupLocation || '—',
-              pickupDate: startDt || '—',
-              pickupTime: startTm ? startTm.slice(0, 5) : prev.pickupTime,
-              returnDate: endDt || '—',
-              returnTime: endTm ? endTm.slice(0, 5) : prev.returnTime,
-              totalCharges: openAgr.totalCharges ?? 0,
-              rentalCharges: openAgr.totalCharges ?? 0,
-              estimatedCharges: openAgr.totalCharges ?? 0,
-              status: openAgr.agreementStatus === 'Open' ? 'Active' : 'Returned',
+              pickupLocation: openAgr.location || (openAgr as any).pickupLocation || prev.pickupLocation,
+              returnLocation: (openAgr as any).closingLocation || (openAgr as any).returnLocation || openAgr.location || prev.returnLocation,
+              pickupDate: startDt || prev.pickupDate,
+              pickupTime: startTm ? startTm.slice(0, 5) : (prev.pickupTime || '10:00'),
+              returnDate: endDt || prev.returnDate,
+              returnTime: endTm ? endTm.slice(0, 5) : (prev.returnTime || '10:00'),
+              rentalPeriodDays: days,
+              totalCharges: openAgr.totalCharges ?? prev.totalCharges,
+              rentalCharges: openAgr.totalCharges ?? prev.rentalCharges,
+              estimatedCharges: openAgr.totalCharges ?? prev.estimatedCharges,
+              status: (openAgr.agreementStatus || '').toLowerCase() === 'open' ? 'Active' : (openAgr.agreementStatus as any) || 'Active',
               vehicle: {
                 ...prev.vehicle,
                 plateNo: resolvedPlate || prev.vehicle.plateNo,
@@ -586,20 +626,25 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             ) || (items.length > 1 ? items[1] : undefined);
 
           if (closedAgr) {
-            const [startDt, startTm] = (closedAgr.startDate || '').split('T');
-            const [endDt, endTm] = (closedAgr.endDate || '').split('T');
+            const [startDt, startTm] = (closedAgr.startDate || '').split(/T| /);
+            const [endDt, endTm] = (closedAgr.endDate || '').split(/T| /);
+            const days = calcRentalDays(closedAgr.startDate, closedAgr.endDate, 3);
             const resolvedPlate = (closedAgr as any).vehicle?.plateNo || (closedAgr as any).plateNo || '';
             setCustomer((prev) => ({ ...prev, previousRentalNo: closedAgr.agreementNo }));
             setPreviousRental((prev) => ({
               ...prev,
               agreementNo: closedAgr.agreementNo,
-              pickupLocation: closedAgr.location || closedAgr.pickupLocation || '—',
-              returnLocation: closedAgr.location || closedAgr.pickupLocation || '—',
-              pickupDate: startDt || '—',
-              pickupTime: startTm ? startTm.slice(0, 5) : prev.pickupTime,
-              returnDate: endDt || '—',
-              returnTime: endTm ? endTm.slice(0, 5) : prev.returnTime,
+              pickupLocation: closedAgr.location || (closedAgr as any).pickupLocation || prev.pickupLocation,
+              returnLocation: (closedAgr as any).closingLocation || (closedAgr as any).returnLocation || closedAgr.location || prev.returnLocation,
+              pickupDate: startDt || prev.pickupDate,
+              pickupTime: startTm ? startTm.slice(0, 5) : (prev.pickupTime || '10:00'),
+              returnDate: endDt || prev.returnDate,
+              returnTime: endTm ? endTm.slice(0, 5) : (prev.returnTime || '10:00'),
+              rentalPeriodDays: days,
               totalCharges: closedAgr.totalCharges ?? prev.totalCharges,
+              rentalCharges: closedAgr.totalCharges ?? prev.rentalCharges,
+              status: 'Returned',
+              depositStatus: prev.depositStatus || 'Settled',
               vehicle: {
                 ...prev.vehicle,
                 plateNo: resolvedPlate || prev.vehicle.plateNo,
@@ -622,25 +667,42 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             const [endDt, endTm] = (book.endDate || '').split(/T| /);
             const days = calcRentalDays(book.startDate, book.endDate, 1);
             const rType = days >= 30 ? 'Monthly' : days >= 7 ? 'Weekly' : 'Daily';
-            setReservationQuote((prev) => ({
-              ...prev,
-              quoteNo: book.agreementNo || book.bookingNo || prev.quoteNo,
-              pickupDate: startDt || prev.pickupDate,
-              pickupTime: startTm ? startTm.slice(0, 5) : prev.pickupTime,
-              returnDate: endDt || prev.returnDate,
-              returnTime: endTm ? endTm.slice(0, 5) : prev.returnTime,
-              rentalDays: days,
-              rentalType: rType,
-              pickupLocation: book.location || prev.pickupLocation,
-              returnLocation: (book as any).closingLocation || (book as any).returnLocation || book.location || prev.returnLocation,
-              vehicleGroup: book.vehicleGroup?.name || (book as any).vehicleGroup || prev.vehicleGroup,
-              status: book.bookingStatus || book.agreementStatus || prev.status,
-              quoteBreakdown: {
-                rentalCharges: book.totalCharges ? Math.round((book.totalCharges / 1.05) * 100) / 100 : prev.quoteBreakdown.rentalCharges,
-                vatAmount: book.totalCharges ? Math.round((book.totalCharges - book.totalCharges / 1.05) * 100) / 100 : prev.quoteBreakdown.vatAmount,
-                totalAmount: book.totalCharges ?? prev.quoteBreakdown.totalAmount,
-              },
-            }));
+            setReservationQuote((prev) => {
+              const resolvedGroupName =
+                typeof book.vehicleGroup === 'string'
+                  ? book.vehicleGroup
+                  : book.vehicleGroup?.name ||
+                    (book as any).vehicleGroup?.description ||
+                    (book as any).vehicleGroup?.groupNo ||
+                    (typeof prev.vehicleGroup === 'string' ? prev.vehicleGroup : (prev.vehicleGroup as any)?.name) ||
+                    'Group AZ';
+
+              return {
+                ...prev,
+                quoteNo: book.agreementNo || book.bookingNo || prev.quoteNo,
+                pickupDate: startDt || prev.pickupDate,
+                pickupTime: startTm ? startTm.slice(0, 5) : prev.pickupTime,
+                returnDate: endDt || prev.returnDate,
+                returnTime: endTm ? endTm.slice(0, 5) : prev.returnTime,
+                rentalDays: days,
+                rentalType: rType,
+                pickupLocation: book.location || prev.pickupLocation,
+                returnLocation: (book as any).closingLocation || (book as any).returnLocation || book.location || prev.returnLocation,
+                vehicleGroup: resolvedGroupName,
+                status: book.bookingStatus || book.agreementStatus || prev.status,
+                vehicle: {
+                  ...(prev.vehicle || mockReservationQuote.vehicle),
+                  model: (book as any).vehicle?.model || resolvedGroupName || prev.vehicle?.model || 'Small Sedan',
+                  plateNo: (book as any).vehicle?.plateNo || (book as any).plateNo || prev.vehicle?.plateNo || '',
+                },
+                refundableDeposit: prev.refundableDeposit ?? mockReservationQuote.refundableDeposit ?? 1000,
+                quoteBreakdown: {
+                  rentalCharges: book.totalCharges ? Math.round((book.totalCharges / 1.05) * 100) / 100 : (prev.quoteBreakdown?.rentalCharges || 190),
+                  vatAmount: book.totalCharges ? Math.round((book.totalCharges - book.totalCharges / 1.05) * 100) / 100 : (prev.quoteBreakdown?.vatAmount || 9.5),
+                  totalAmount: book.totalCharges ?? (prev.quoteBreakdown?.totalAmount || 199.5),
+                },
+              };
+            });
           }
         }
       }
@@ -1209,25 +1271,42 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   };
 
   const extendRentalAgreement = async (params: { newReturnDate: string; newReturnTime: string; additionalCharges: number; notes: string }) => {
-    setActiveRental((prev) => ({
-      ...prev,
-      returnDate: params.newReturnDate,
-      returnTime: params.newReturnTime,
-      totalCharges: (prev.totalCharges || 0) + params.additionalCharges,
-    }));
+    setActiveRental((prev) => {
+      const days = calcRentalDays(prev.pickupDate, params.newReturnDate, prev.rentalPeriodDays + 1);
+      return {
+        ...prev,
+        returnDate: params.newReturnDate,
+        returnTime: params.newReturnTime,
+        rentalPeriodDays: days,
+        totalCharges: (prev.totalCharges || 0) + params.additionalCharges,
+      };
+    });
     return { success: true, message: `Agreement ${activeRental.agreementNo} extended to ${params.newReturnDate}` };
   };
 
   const processEarlyReturn = async (params: { returnDate: string; returnTime: string; locationId: number; returnOdometer: number; fuelLevel: string }) => {
     const loc = locations.find((l) => l.id === params.locationId);
-    setActiveRental((prev) => ({
-      ...prev,
+    const returnLocName = loc?.name || activeRental.returnLocation;
+    const days = calcRentalDays(activeRental.pickupDate, params.returnDate, activeRental.rentalPeriodDays);
+
+    const returnedRental: RentalAgreement = {
+      ...activeRental,
       returnDate: params.returnDate,
       returnTime: params.returnTime,
-      returnLocation: loc?.name || prev.returnLocation,
+      returnLocation: returnLocName,
+      rentalPeriodDays: days,
       status: 'Returned',
+      depositStatus: 'Settled',
+    };
+
+    setActiveRental(returnedRental);
+    setPreviousRental(returnedRental);
+    setCustomer((prev) => ({
+      ...prev,
+      previousRentalNo: activeRental.agreementNo,
     }));
-    return { success: true, message: `Agreement ${activeRental.agreementNo} check-in recorded at ${loc?.name || 'Branch'}` };
+
+    return { success: true, message: `Agreement ${activeRental.agreementNo} check-in recorded at ${returnLocName}` };
   };
 
   const fetchLocations = async (): Promise<LocationItem[]> => {
@@ -1623,8 +1702,6 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       const targetCustomerId =
         params?.customerId !== undefined
           ? params.customerId
-          : customer.id && customer.id !== '—'
-          ? parseInt(String(customer.id).replace(/\D/g, ''), 10) || 0
           : 0;
 
       const res = await apiService.getBookings({
@@ -1671,8 +1748,6 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     const targetCustomerId =
       params?.customerId !== undefined
         ? params.customerId
-        : customer.id && customer.id !== '—'
-        ? parseInt(String(customer.id).replace(/\D/g, ''), 10) || 0
         : 0;
 
     const queryKey = `${targetCustomerId}|${params?.agreementNo ?? ''}|${params?.status ?? ''}|${params?.fromDate ?? ''}|${params?.toDate ?? ''}`;
@@ -1727,7 +1802,11 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         customerCards,
         updateCustomer,
         activeRental,
+        setActiveRental,
         previousRental,
+        setPreviousRental,
+        updateActiveRental,
+        updatePreviousRental,
         billingSummary,
         reservationQuote,
         caseDetails,

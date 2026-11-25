@@ -4,6 +4,7 @@ import { CustomerSidebar } from './CustomerSidebar';
 // import { CustomerActivitySidebar } from './CustomerActivitySidebar';
 import { NavigationTabs } from '../common/NavigationTabs';
 import { SkeletonCard } from '../common/SkeletonCard';
+import { ErrorBoundary } from '../common/ErrorBoundary';
 import { CustomerEditModal } from '../modals/CustomerEditModal';
 import { TransferCallModal } from '../modals/TransferCallModal';
 import { AddPaymentCardModal } from '../modals/AddPaymentCardModal';
@@ -27,16 +28,18 @@ export const AppLayout: React.FC = () => {
         {/* Center Workspace (Page Content + Communication Dock) */}
         <main className="flex-1 min-w-0 flex flex-col overflow-hidden bg-[#f4f6f9] relative">
           <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-            <Suspense
-              fallback={
-                <div className="p-3 space-y-3">
-                  <SkeletonCard lines={2} />
-                  <SkeletonCard lines={3} />
-                </div>
-              }
-            >
-              <Outlet />
-            </Suspense>
+            <ErrorBoundary>
+              <Suspense
+                fallback={
+                  <div className="p-3 space-y-3">
+                    <SkeletonCard lines={2} />
+                    <SkeletonCard lines={3} />
+                  </div>
+                }
+              >
+                <Outlet />
+              </Suspense>
+            </ErrorBoundary>
           </div>
         </main>
 

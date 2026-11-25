@@ -7,7 +7,7 @@
     },
     {
       "source": "/cxpulse-api/:path*",
-      "destination": "https://cxpulse.agmcgroup.ae/:path*"
+      "destination": "/api/cxpulse-proxy?path=:path*"
     },
     {
       "source": "/(.*)",

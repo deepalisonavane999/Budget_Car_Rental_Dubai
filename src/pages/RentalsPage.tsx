@@ -1,9 +1,18 @@
 import React, { useState } from 'react';
-import { MoreHorizontal, ChevronRight, FileText, Car, CalendarPlus, CheckCircle2 } from 'lucide-react';
+import {
+  MoreHorizontal,
+  ChevronRight,
+  FileText,
+  Car,
+  CalendarPlus,
+  CheckCircle2,
+  Edit3,
+} from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { Badge } from '../components/common/Badge';
 import { CommunicationDock } from '../components/communication/CommunicationDock';
 import { useNavigate } from 'react-router-dom';
+import { EditRentalModal } from '../components/modals/EditRentalModal';
 
 export const RentalsPage: React.FC = () => {
   const {
@@ -18,6 +27,7 @@ export const RentalsPage: React.FC = () => {
   } = useWorkspace();
   const navigate = useNavigate();
   const [agreementModalOpen, setAgreementModalOpen] = useState(false);
+  const [editRentalTarget, setEditRentalTarget] = useState<'active' | 'previous' | null>(null);
 
   // Deposit Information from rental or billing summary without extra on-load API calls
   const depositAmount = previousRental.depositAmount || billingSummary.securityDeposit || 1000;
@@ -42,11 +52,19 @@ export const RentalsPage: React.FC = () => {
 
             <div className="flex items-center space-x-1.5">
               <button
+                onClick={() => setEditRentalTarget('active')}
+                className="px-2 py-0.5 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 rounded text-[10px] font-semibold flex items-center space-x-1 transition-colors cursor-pointer"
+                title="Update active rental details"
+              >
+                <Edit3 className="w-3 h-3 text-blue-600" />
+                <span>Update</span>
+              </button>
+              <button
                 onClick={() => setIsExtensionOpen(true)}
-                className="px-2 py-0.5 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 rounded text-[10px] font-semibold flex items-center space-x-1 transition-colors"
+                className="px-2 py-0.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 rounded text-[10px] font-semibold flex items-center space-x-1 transition-colors"
                 title="Request rental extension"
               >
-                <CalendarPlus className="w-3 h-3 text-blue-600" />
+                <CalendarPlus className="w-3 h-3 text-slate-500" />
                 <span>Extend Rental</span>
               </button>
               <button
@@ -135,8 +153,19 @@ export const RentalsPage: React.FC = () => {
                 Previous Rental — {previousRental.agreementNo}
               </h2>
               <Badge variant="gray" className="text-[10px] py-0 px-1.5">
-                Returned
+                {previousRental.status || 'Returned'}
               </Badge>
+            </div>
+
+            <div className="flex items-center space-x-1.5">
+              <button
+                onClick={() => setEditRentalTarget('previous')}
+                className="px-2 py-0.5 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 rounded text-[10px] font-semibold flex items-center space-x-1 transition-colors cursor-pointer"
+                title="Update previous rental details"
+              >
+                <Edit3 className="w-3 h-3 text-blue-600" />
+                <span>Update</span>
+              </button>
             </div>
           </div>
 
@@ -191,7 +220,7 @@ export const RentalsPage: React.FC = () => {
             <div className="col-span-1 leading-tight border-l border-slate-100 pl-2">
               <span className="text-[9px] text-slate-400 block">Status</span>
               <Badge variant="gray" className="text-[9px] py-0 px-1 w-max mt-0.5">
-                Returned
+                {previousRental.status || 'Returned'}
               </Badge>
             </div>
 
@@ -262,6 +291,12 @@ export const RentalsPage: React.FC = () => {
           </div>
         </div>
       )}
+      {/* Edit Rental Modal (Current / Previous) */}
+      <EditRentalModal
+        isOpen={!!editRentalTarget}
+        target={editRentalTarget || 'active'}
+        onClose={() => setEditRentalTarget(null)}
+      />
     </div>
   );
 };

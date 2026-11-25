@@ -909,7 +909,9 @@ export const CreateBookingModal: React.FC = () => {
                           {reservationQuote.vehicle?.model || 'Nissan Sunny'}
                         </h4>
                         <span className="px-1.5 py-0.5 text-[9px] font-bold bg-blue-100 text-blue-800 rounded">
-                          {reservationQuote.vehicleGroup || 'Group B • Sedan'}
+                          {typeof reservationQuote.vehicleGroup === 'object'
+                            ? (reservationQuote.vehicleGroup as any)?.name || 'Group B • Sedan'
+                            : reservationQuote.vehicleGroup || 'Group B • Sedan'}
                         </span>
                       </div>
                       <div className="text-[10px] text-slate-500 mt-0.5 flex items-center space-x-2">

@@ -16,7 +16,7 @@ import { apiService } from '../services/apiService';
 import { Badge } from '../components/common/Badge';
 import { CommunicationDock } from '../components/communication/CommunicationDock';
 // import { mockLeadHistory } from '../services/mockData';
-import { mockLeadHistory } from '../services/mockDataAccCollection';
+import { mockLeadHistory, mockReservationQuote } from '../services/mockDataAccCollection';
 
 export const ReservationsPage: React.FC = () => {
   const {
@@ -30,9 +30,33 @@ export const ReservationsPage: React.FC = () => {
     openUpdateBookingModal,
     setVehicleGroups,
   } = useWorkspace();
-  const [leadHistory] = useState(mockLeadHistory);
+  const [leadHistory] = useState(mockLeadHistory || []);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
+
+  // Safe normalized quote and vehicle data to prevent render crashes
+  const quote = reservationQuote || mockReservationQuote;
+  const vehicle = quote.vehicle || mockReservationQuote.vehicle || {
+    model: 'Small Sedan',
+    group: 'Group AZ',
+    seats: 5,
+    bags: 2,
+    transmission: 'Automatic',
+    plateNo: '',
+  };
+  const quoteBreakdown = quote.quoteBreakdown || mockReservationQuote.quoteBreakdown || {
+    rentalCharges: 190,
+    vatAmount: 9.5,
+    totalAmount: 199.5,
+  };
+  const refundableDeposit = quote.refundableDeposit ?? mockReservationQuote.refundableDeposit ?? 1000;
+
+  const renderVehicleGroup = (vg: any): string => {
+    if (!vg) return '—';
+    if (typeof vg === 'string') return vg;
+    if (typeof vg === 'object') return vg.name || vg.description || vg.groupNo || '—';
+    return String(vg);
+  };
 
   const triggerNotice = (msg: string) => {
     setActionNotice(msg);
@@ -87,37 +111,8 @@ export const ReservationsPage: React.FC = () => {
                 Availability & Quote
               </h2>
               <span className="text-[10px] text-slate-400">
-                Source: <span className="font-semibold text-slate-700">{reservationQuote.source}</span>
+                Source: <span className="font-semibold text-slate-700">{quote.source || 'Direct'}</span>
               </span>
-            </div>
-
-            <div className="flex items-center space-x-1.5">
-              <span className="font-mono font-bold text-blue-600 text-[11px]">
-                {reservationQuote.quoteNo}
-              </span>
-              <div className="relative">
-                <select
-                  value={reservationQuote.status || 'Quote'}
-                  onChange={(e) => setReservationQuote((prev) => ({ ...prev, status: e.target.value }))}
-                  className="pl-1.5 pr-5 py-0.5 bg-slate-50 border border-slate-300 rounded text-[10px] font-semibold text-slate-800 appearance-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
-                >
-                  <option value="Quote">Quote</option>
-                  <option value="Confirmed">Confirmed</option>
-                  <option value="Active">Active</option>
-                  <option value="Completed">Completed</option>
-                  <option value="Cancelled">Cancelled</option>
-                </select>
-                <ChevronDown className="w-2.5 h-2.5 text-slate-500 absolute right-1 top-1.5 pointer-events-none" />
-              </div>
-              <button
-                type="button"
-                onClick={handleUpdateBooking}
-                className="flex items-center space-x-1 px-2 py-0.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded text-[10px] font-bold transition-colors cursor-pointer"
-                title="Edit and update reservation details"
-              >
-                <Edit3 className="w-2.5 h-2.5" />
-                <span>Update</span>
-              </button>
             </div>
           </div>
 
@@ -126,42 +121,42 @@ export const ReservationsPage: React.FC = () => {
             <div>
               <span className="text-slate-400 block text-[9px]">Pickup</span>
               <span className="font-bold text-slate-800 truncate block">
-                {reservationQuote.pickupLocation}
+                {quote.pickupLocation || '—'}
               </span>
             </div>
             <div>
               <span className="text-slate-400 block text-[9px]">Pickup Date</span>
               <span className="font-bold text-slate-800 block">
-                {reservationQuote.pickupDate} {reservationQuote.pickupTime}
+                {quote.pickupDate || '—'} {quote.pickupTime || ''}
               </span>
             </div>
             <div>
               <span className="text-slate-400 block text-[9px]">Return</span>
               <span className="font-bold text-slate-800 truncate block">
-                {reservationQuote.returnLocation}
+                {quote.returnLocation || '—'}
               </span>
             </div>
             <div>
               <span className="text-slate-400 block text-[9px]">Return Date</span>
               <span className="font-bold text-slate-800 block">
-                {reservationQuote.returnDate} {reservationQuote.returnTime}
+                {quote.returnDate || '—'} {quote.returnTime || ''}
               </span>
             </div>
             <div>
               <span className="text-slate-400 block text-[9px]">Rental Type</span>
               <span className="font-bold text-slate-800 block">
-                {reservationQuote.rentalType} ({reservationQuote.rentalDays}d)
+                {quote.rentalType || 'Daily'} ({quote.rentalDays || 1}d)
               </span>
             </div>
             <div>
               <span className="text-slate-400 block text-[9px]">Vehicle Group</span>
-              <span className="font-bold text-slate-800 block">{reservationQuote.vehicleGroup}</span>
+              <span className="font-bold text-slate-800 block">{renderVehicleGroup(quote.vehicleGroup)}</span>
             </div>
             <div>
               <span className="text-slate-400 block text-[9px]">Availability</span>
               <div className="flex items-center space-x-0.5 text-amber-700 font-bold">
                 <Clock className="w-2.5 h-2.5 text-amber-600 shrink-0" />
-                <span>{reservationQuote.availabilityStatus}</span>
+                <span>{quote.availabilityStatus || 'Available'}</span>
               </div>
             </div>
           </div>
@@ -180,20 +175,20 @@ export const ReservationsPage: React.FC = () => {
                 <div className="leading-tight">
                   <div className="flex items-center space-x-1.5">
                     <h3 className="font-bold text-slate-900 text-xs group-hover:text-blue-600 transition-colors">
-                      {reservationQuote.vehicle.model}
+                      {vehicle.model || 'Small Sedan'}
                     </h3>
-                    {reservationQuote.vehicle.plateNo && (
+                    {vehicle.plateNo && (
                       <span className="font-mono font-bold text-blue-700 bg-blue-50 px-1 py-0.2 rounded border border-blue-200 text-[9px]">
-                        {reservationQuote.vehicle.plateNo}
+                        {vehicle.plateNo}
                       </span>
                     )}
                   </div>
                   <div className="flex items-center space-x-1.5 text-slate-500 text-[9px] mt-0.5">
-                    <span>{reservationQuote.vehicle.seats || 5} Seats</span>
+                    <span>{vehicle.seats || 5} Seats</span>
                     <span>•</span>
-                    <span>{reservationQuote.vehicle.bags || 2} Bags</span>
+                    <span>{vehicle.bags || 2} Bags</span>
                     <span>•</span>
-                    <span>{reservationQuote.vehicle.transmission || 'Auto'}</span>
+                    <span>{vehicle.transmission || 'Auto'}</span>
                   </div>
                 </div>
               </div>
@@ -204,7 +199,7 @@ export const ReservationsPage: React.FC = () => {
               <div className="flex justify-between text-slate-700">
                 <span>Rental + VAT</span>
                 <span className="font-mono font-bold text-blue-600 text-xs">
-                  AED {reservationQuote.quoteBreakdown.totalAmount}
+                  AED {quoteBreakdown.totalAmount ?? 199.5}
                 </span>
               </div>
             </div>
@@ -212,13 +207,13 @@ export const ReservationsPage: React.FC = () => {
             <div className="col-span-3 border-l border-slate-100 pl-2">
               <span className="text-slate-400 block text-[9px]">Deposit (Separate)</span>
               <span className="font-bold text-slate-900 block">
-                AED {reservationQuote.refundableDeposit.toLocaleString()}
+                AED {refundableDeposit.toLocaleString()}
               </span>
             </div>
 
             <div className="col-span-2 border-l border-slate-100 pl-2">
               <span className="text-slate-400 block text-[9px]">Eligibility</span>
-              <span className="font-bold text-amber-700 block">Pending Check</span>
+              <span className="font-bold text-amber-700 block">{quote.eligibilityCheck || 'Pending Check'}</span>
             </div>
           </div>
 
