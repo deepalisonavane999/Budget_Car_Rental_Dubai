@@ -159,7 +159,7 @@ export const RentalReturnModal: React.FC = () => {
           <div className="pt-2 flex items-center justify-between border-t border-slate-100">
             <div className="flex items-center space-x-1 text-slate-400 text-[10px]">
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Speed Auto Systems ERP Integration</span>
+              <span>ERP Integration</span>
             </div>
 
             <div className="flex items-center space-x-2">

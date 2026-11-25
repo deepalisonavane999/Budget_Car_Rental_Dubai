@@ -79,7 +79,7 @@ interface WorkspaceContextType {
   // Domain Actions
   checkVehicleAvailability: (vehicleGroupId?: number) => Promise<{ count: number; success: boolean; message: string }>;
   createReservationBooking: (customPayload?: BookingTransactionPayload) => Promise<{ success: boolean; bookingNo: string; message: string }>;
-  updateReservationBooking: (notes?: string) => Promise<{ success: boolean; message: string }>;
+  updateReservationBooking: (customPayload?: BookingTransactionPayload | string) => Promise<{ success: boolean; message: string; bookingNo?: string }>;
   confirmReservationBooking: (bookingNo?: string) => Promise<{ success: boolean; message: string }>;
   cancelReservationBooking: (bookingNo?: string, reason?: string) => Promise<{ success: boolean; message: string }>;
   saveCustomerContactCards: (cards: ContactCardItem[]) => Promise<{ success: boolean; message: string }>;
@@ -156,6 +156,11 @@ interface WorkspaceContextType {
   setIsReturnOpen: (open: boolean) => void;
   isCreateBookingOpen: boolean;
   setIsCreateBookingOpen: (open: boolean) => void;
+  bookingModalMode: 'create' | 'update';
+  setBookingModalMode: React.Dispatch<React.SetStateAction<'create' | 'update'>>;
+  openCreateBookingModal: () => void;
+  openUpdateBookingModal: () => void;
+  setReservationQuote: React.Dispatch<React.SetStateAction<ReservationQuote>>;
 
   // Search & Profile Actions
   searchCustomer: (query: string) => Promise<{ success: boolean; message: string }>;
@@ -363,6 +368,25 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [isExtensionOpen, setIsExtensionOpen] = useState(false);
   const [isReturnOpen, setIsReturnOpen] = useState(false);
   const [isCreateBookingOpen, setIsCreateBookingOpen] = useState(false);
+  const [bookingModalMode, setBookingModalMode] = useState<'create' | 'update'>('create');
+
+  const openCreateBookingModal = () => {
+    setBookingModalMode('create');
+    setIsCreateBookingOpen(true);
+  };
+
+  const openUpdateBookingModal = () => {
+    setBookingModalMode('update');
+    setIsCreateBookingOpen(true);
+  };
+
+  const calcRentalDays = (start?: string | null, end?: string | null, fallback = 1): number => {
+    if (!start || !end) return fallback;
+    const d1 = new Date(start.replace(' ', 'T')).getTime();
+    const d2 = new Date(end.replace(' ', 'T')).getTime();
+    if (isNaN(d1) || isNaN(d2) || d2 <= d1) return fallback;
+    return Math.max(1, Math.round((d2 - d1) / (1000 * 60 * 60 * 24)));
+  };
 
   const toggleLeftSidebar = () => setIsLeftSidebarOpen((prev) => !prev);
   const toggleRightSidebar = () => setIsRightSidebarOpen((prev) => !prev);
@@ -594,8 +618,10 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
               (b) => (b.bookingStatus || (b as any).status || '').toLowerCase() === 'confirmed'
             ) || bItems[0];
           if (book) {
-            const [startDt, startTm] = (book.startDate || '').split('T');
-            const [endDt, endTm] = (book.endDate || '').split('T');
+            const [startDt, startTm] = (book.startDate || '').split(/T| /);
+            const [endDt, endTm] = (book.endDate || '').split(/T| /);
+            const days = calcRentalDays(book.startDate, book.endDate, 1);
+            const rType = days >= 30 ? 'Monthly' : days >= 7 ? 'Weekly' : 'Daily';
             setReservationQuote((prev) => ({
               ...prev,
               quoteNo: book.agreementNo || book.bookingNo || prev.quoteNo,
@@ -603,10 +629,15 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
               pickupTime: startTm ? startTm.slice(0, 5) : prev.pickupTime,
               returnDate: endDt || prev.returnDate,
               returnTime: endTm ? endTm.slice(0, 5) : prev.returnTime,
+              rentalDays: days,
+              rentalType: rType,
               pickupLocation: book.location || prev.pickupLocation,
-              returnLocation: book.location || prev.returnLocation,
+              returnLocation: (book as any).closingLocation || (book as any).returnLocation || book.location || prev.returnLocation,
+              vehicleGroup: book.vehicleGroup?.name || (book as any).vehicleGroup || prev.vehicleGroup,
+              status: book.bookingStatus || book.agreementStatus || prev.status,
               quoteBreakdown: {
-                ...prev.quoteBreakdown,
+                rentalCharges: book.totalCharges ? Math.round((book.totalCharges / 1.05) * 100) / 100 : prev.quoteBreakdown.rentalCharges,
+                vatAmount: book.totalCharges ? Math.round((book.totalCharges - book.totalCharges / 1.05) * 100) / 100 : prev.quoteBreakdown.vatAmount,
                 totalAmount: book.totalCharges ?? prev.quoteBreakdown.totalAmount,
               },
             }));
@@ -783,16 +814,35 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     const res = await apiService.createBooking(payload);
     if (res.success && (res.result?.agreementNo || res.result?.bookingNo || res.result?.id)) {
       const assignedNo = res.result.agreementNo || res.result.bookingNo || `BKG-${res.result.id}`;
+      const bkg = payload.booking || ({} as any);
+      const [startDt, startTm] = (bkg.startDate || '').split(/T| /);
+      const [endDt, endTm] = (bkg.endDate || '').split(/T| /);
+      const days = calcRentalDays(bkg.startDate, bkg.endDate, 1);
+      const rType = days >= 30 ? 'Monthly' : days >= 7 ? 'Weekly' : 'Daily';
+      const locObj = locations.find((l) => l.id === bkg.locationId);
+      const closeLocObj = locations.find((l) => l.id === bkg.closingLocationId);
+      const resolvedPickupLoc = locObj ? locObj.name : (bkg.pickupLocationAddress || 'BRAC Branch');
+      const resolvedReturnLoc = closeLocObj ? closeLocObj.name : (bkg.closingLocationAddress || resolvedPickupLoc);
+
       setReservationQuote((prev) => ({
         ...prev,
         quoteNo: assignedNo,
-        status: 'Created',
-        pickupDate: payload.booking?.startDate || prev.pickupDate,
-        returnDate: payload.booking?.endDate || prev.returnDate,
-        pickupLocation: payload.booking?.pickupLocationAddress || prev.pickupLocation,
+        status: 'Confirmed',
+        availabilityStatus: 'Available',
+        pickupDate: startDt || prev.pickupDate,
+        pickupTime: startTm ? startTm.slice(0, 5) : (prev.pickupTime || '09:00'),
+        returnDate: endDt || prev.returnDate,
+        returnTime: endTm ? endTm.slice(0, 5) : (prev.returnTime || '09:00'),
+        pickupLocation: resolvedPickupLoc,
+        pickupLocationId: bkg.locationId || prev.pickupLocationId,
+        returnLocation: resolvedReturnLoc,
+        returnLocationId: bkg.closingLocationId || prev.returnLocationId,
+        rentalDays: days,
+        rentalType: rType,
         quoteBreakdown: {
-          ...prev.quoteBreakdown,
-          totalAmount: payload.amount || payload.booking?.totalCharges || prev.quoteBreakdown.totalAmount,
+          rentalCharges: payload.amount ? Math.round((payload.amount / 1.05) * 100) / 100 : prev.quoteBreakdown.rentalCharges,
+          vatAmount: payload.amount ? Math.round((payload.amount - payload.amount / 1.05) * 100) / 100 : prev.quoteBreakdown.vatAmount,
+          totalAmount: payload.amount || bkg.totalCharges || prev.quoteBreakdown.totalAmount,
         },
       }));
 
@@ -807,7 +857,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             startDate: payload.booking.startDate,
             endDate: payload.booking.endDate,
             totalCharges: payload.booking.totalCharges,
-            location: payload.booking.pickupLocationAddress,
+            location: resolvedPickupLoc,
             locationId: payload.booking.locationId,
             vehicleGroup: {
               id: payload.booking.tariffGroupId || 35,
@@ -828,7 +878,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       return {
         success: true,
         bookingNo: assignedNo,
-        message: `Booking ${assignedNo} created successfully in Speed Auto ERP`,
+        message: `Booking ${assignedNo} created successfully in ERP`,
       };
     }
     return {
@@ -838,13 +888,70 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     };
   };
 
-  const updateReservationBooking = async (notes?: string) => {
-    const payload = buildBookingPayload(notes || 'Updated via CRM Workspace');
-    payload.booking.bookingNo = reservationQuote.quoteNo;
+  const updateReservationBooking = async (customPayload?: BookingTransactionPayload | string) => {
+    const payload =
+      typeof customPayload === 'object' && customPayload !== null
+        ? customPayload
+        : buildBookingPayload(typeof customPayload === 'string' ? customPayload : 'Updated via CRM Workspace');
+    payload.booking.bookingNo = payload.booking.bookingNo || reservationQuote.quoteNo;
     const res = await apiService.updateBooking(payload);
+    if (res.success) {
+      const bkg = payload.booking || ({} as any);
+      const [startDt, startTm] = (bkg.startDate || '').split(/T| /);
+      const [endDt, endTm] = (bkg.endDate || '').split(/T| /);
+      const days = calcRentalDays(bkg.startDate, bkg.endDate, 1);
+      const rType = days >= 30 ? 'Monthly' : days >= 7 ? 'Weekly' : 'Daily';
+      const locObj = locations.find((l) => l.id === bkg.locationId);
+      const closeLocObj = locations.find((l) => l.id === bkg.closingLocationId);
+      const resolvedPickupLoc = locObj ? locObj.name : (bkg.pickupLocationAddress || reservationQuote.pickupLocation);
+      const resolvedReturnLoc = closeLocObj ? closeLocObj.name : (bkg.closingLocationAddress || resolvedPickupLoc || reservationQuote.returnLocation);
+
+      setReservationQuote((prev) => ({
+        ...prev,
+        quoteNo: payload.booking.bookingNo || prev.quoteNo,
+        status: 'Updated',
+        pickupDate: startDt || prev.pickupDate,
+        pickupTime: startTm ? startTm.slice(0, 5) : prev.pickupTime,
+        returnDate: endDt || prev.returnDate,
+        returnTime: endTm ? endTm.slice(0, 5) : prev.returnTime,
+        rentalDays: days,
+        rentalType: rType,
+        pickupLocation: resolvedPickupLoc,
+        pickupLocationId: bkg.locationId || prev.pickupLocationId,
+        returnLocation: resolvedReturnLoc,
+        returnLocationId: bkg.closingLocationId || prev.returnLocationId,
+        quoteBreakdown: {
+          rentalCharges: payload.amount ? Math.round((payload.amount / 1.05) * 100) / 100 : prev.quoteBreakdown.rentalCharges,
+          vatAmount: payload.amount ? Math.round((payload.amount - payload.amount / 1.05) * 100) / 100 : prev.quoteBreakdown.vatAmount,
+          totalAmount: payload.amount || bkg.totalCharges || prev.quoteBreakdown.totalAmount,
+        },
+      }));
+
+      // Also reflect in bookingResults list
+      setBookingResults((prev) =>
+        prev.map((b) =>
+          b.bookingNo === payload.booking.bookingNo || b.agreementNo === payload.booking.bookingNo
+            ? {
+                ...b,
+                startDate: bkg.startDate,
+                endDate: bkg.endDate,
+                totalCharges: payload.amount || bkg.totalCharges,
+                location: resolvedPickupLoc,
+              }
+            : b
+        )
+      );
+
+      return {
+        success: true,
+        bookingNo: payload.booking.bookingNo || reservationQuote.quoteNo,
+        message: `Booking ${payload.booking.bookingNo || reservationQuote.quoteNo} updated successfully`,
+      };
+    }
     return {
-      success: res.success,
-      message: res.success ? `Booking ${reservationQuote.quoteNo} updated` : 'Unable to update booking right now',
+      success: false,
+      bookingNo: reservationQuote.quoteNo,
+      message: res.error || 'Unable to update booking right now',
     };
   };
 
@@ -1687,6 +1794,11 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         setIsReturnOpen,
         isCreateBookingOpen,
         setIsCreateBookingOpen,
+        bookingModalMode,
+        setBookingModalMode,
+        openCreateBookingModal,
+        openUpdateBookingModal,
+        setReservationQuote,
         searchCustomer,
         resetCustomer,
         selectVehicleForQuote,

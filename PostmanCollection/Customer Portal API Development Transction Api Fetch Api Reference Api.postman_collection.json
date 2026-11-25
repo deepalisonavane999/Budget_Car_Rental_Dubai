@@ -61,7 +61,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\r\n    \"Email\":\"wajidteste@speedautosystems.com\"\r\n    // \"MobileNo\":\"\"\r\n}",
+                  "raw": "{\r\n    \"Email\":\"wajid.test@budget-uae.com\"\r\n    // \"MobileNo\":\"\"\r\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -97,7 +97,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n    \"success\": true,\n    \"error\": null,\n    \"result\": {\n        \"id\": 81641,\n        \"tenantId\": 0,\n        \"firstName\": null,\n        \"lastName\": null,\n        \"email\": \"wajidteste@speedautosystems.com\",\n        \"mobileNo\": null,\n        \"contactCategory\": 2,\n        \"locationId\": 21,\n        \"nationality\": null,\n        \"dateOfBirth\": null,\n        \"gender\": null,\n        \"address\": {\n            \"addressLine1\": \"B 506,DUBAI SILICON OASIS HEADQUARTERS BLDG,DUBAI SILICON OASIS,\",\n            \"city\": \"Dubai\",\n            \"country\": \"AE\",\n            \"zipCode\": \"0000\",\n            \"state\": null\n        },\n        \"identityDocuments\": [],\n        \"contactCards\": [\n            {\n                \"id\": 10564,\n                \"cardNoLastFourDigits\": \"3881\",\n                \"expiry\": \"2029-04-23T06:24:02.237\",\n                \"nameOnCard\": \"JOHN  MCCABE\",\n                \"bankName\": null,\n                \"type\": 1\n            },\n            {\n                \"id\": 32891,\n                \"cardNoLastFourDigits\": \"5678\",\n                \"expiry\": \"2026-12-05T12:09:01.947\",\n                \"nameOnCard\": \"Tets\",\n                \"bankName\": \"setsets\",\n                \"type\": 2\n            }\n        ]\n    }\n}"
+              "body": "{\n    \"success\": true,\n    \"error\": null,\n    \"result\": {\n        \"id\": 81641,\n        \"tenantId\": 0,\n        \"firstName\": null,\n        \"lastName\": null,\n        \"email\": \"wajid.test@budget-uae.com\",\n        \"mobileNo\": null,\n        \"contactCategory\": 2,\n        \"locationId\": 21,\n        \"nationality\": null,\n        \"dateOfBirth\": null,\n        \"gender\": null,\n        \"address\": {\n            \"addressLine1\": \"B 506,DUBAI SILICON OASIS HEADQUARTERS BLDG,DUBAI SILICON OASIS,\",\n            \"city\": \"Dubai\",\n            \"country\": \"AE\",\n            \"zipCode\": \"0000\",\n            \"state\": null\n        },\n        \"identityDocuments\": [],\n        \"contactCards\": [\n            {\n                \"id\": 10564,\n                \"cardNoLastFourDigits\": \"3881\",\n                \"expiry\": \"2029-04-23T06:24:02.237\",\n                \"nameOnCard\": \"JOHN  MCCABE\",\n                \"bankName\": null,\n                \"type\": 1\n            },\n            {\n                \"id\": 32891,\n                \"cardNoLastFourDigits\": \"5678\",\n                \"expiry\": \"2026-12-05T12:09:01.947\",\n                \"nameOnCard\": \"Tets\",\n                \"bankName\": \"setsets\",\n                \"type\": 2\n            }\n        ]\n    }\n}"
             }
           ]
         },

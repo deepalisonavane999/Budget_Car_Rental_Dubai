@@ -33,7 +33,7 @@ export const InvoiceExplorer: React.FC = () => {
       }
     } catch {
       setInvoice(null);
-      setErrorMessage('Unable to retrieve invoice from Speed API.');
+      setErrorMessage('Unable to retrieve invoice from ERP API.');
     } finally {
       setLoading(false);
     }
@@ -198,7 +198,7 @@ export const InvoiceExplorer: React.FC = () => {
           <FileText className="w-6 h-6 mx-auto text-slate-300" />
           <p>
             {loading
-              ? 'Loading invoice details from Speed API...'
+              ? 'Loading invoice details from ERP API...'
               : 'No invoice currently loaded. Enter an invoice voucher number above to lookup.'}
           </p>
         </div>

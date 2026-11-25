@@ -1,5 +1,5 @@
 /**
- * Speed Auto Systems / Budget Rent A Car UAE API Client
+ * Budget Rent A Car UAE API Client
  */
 
 export interface ApiResponse<T = any> {

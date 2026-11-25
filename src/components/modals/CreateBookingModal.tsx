@@ -181,11 +181,13 @@ export const CreateBookingModal: React.FC = () => {
   const {
     isCreateBookingOpen,
     setIsCreateBookingOpen,
+    bookingModalMode,
     customer,
     reservationQuote,
     locations,
     fetchLocations,
     createReservationBooking,
+    updateReservationBooking,
   } = useWorkspace();
 
   // Active step / tab - 2 clean steps matching the Postman CreateBooking API
@@ -305,7 +307,7 @@ export const CreateBookingModal: React.FC = () => {
     customer.address?.state || customer.address?.city || 'United Arab Emirates'
   );
 
-  // On-demand customer fetch from Speed Auto ERP
+  // On-demand customer fetch from ERP
   const handleFetchCustomerFromApi = async (queryOverride?: string) => {
     const q = (queryOverride || customerLookupQuery || email || mobileNo || '').trim();
     if (!q) return;
@@ -541,7 +543,10 @@ export const CreateBookingModal: React.FC = () => {
     setResultMessage(null);
 
     try {
-      const res = await createReservationBooking(bookingPayload);
+      const res =
+        bookingModalMode === 'update'
+          ? await updateReservationBooking(bookingPayload)
+          : await createReservationBooking(bookingPayload);
       setIsSubmitting(false);
       setResultMessage({
         success: res.success,
@@ -551,13 +556,13 @@ export const CreateBookingModal: React.FC = () => {
       if (res.success) {
         setTimeout(() => {
           setIsCreateBookingOpen(false);
-        }, 2200);
+        }, 1800);
       }
     } catch {
       setIsSubmitting(false);
       setResultMessage({
         success: false,
-        message: 'Failed to create booking in Speed Auto ERP',
+        message: bookingModalMode === 'update' ? 'Failed to update booking in ERP' : 'Failed to create booking in ERP',
       });
     }
   };
@@ -574,10 +579,11 @@ export const CreateBookingModal: React.FC = () => {
             </div>
             <div>
               <div className="flex items-center space-x-2">
-                <h3 className="font-bold text-sm tracking-tight">Create Reservation</h3>
-                <span className="px-2 py-0.5 text-[9px] font-bold bg-white/20 text-white border border-white/30 rounded-full">
-                  Speed Auto ERP
-                </span>
+                <h3 className="font-bold text-sm tracking-tight">
+                  {bookingModalMode === 'update'
+                    ? `Update Reservation • ${reservationQuote.quoteNo}`
+                    : 'Create Reservation'}
+                </h3>
               </div>
               <p className="text-[11px] text-blue-100 mt-0.5">
                 Customer: <span className="font-semibold text-white">{[firstName, lastName].filter(Boolean).join(' ') || email || 'Valued Customer'}</span> (ID: <span className="font-mono font-bold text-white">{resolvedCustomerId}</span>)
@@ -689,7 +695,7 @@ export const CreateBookingModal: React.FC = () => {
                       <User className="w-3.5 h-3.5" />
                     </div>
                     <div>
-                      <h4 className="font-bold text-xs text-slate-900">Customer Profile (Speed Auto ERP)</h4>
+                      <h4 className="font-bold text-xs text-slate-900">Customer Profile (ERP)</h4>
                       <p className="text-[10px] text-slate-500">Auto-filled from ERP. You can review or modify any field below.</p>
                     </div>
                   </div>
@@ -1088,7 +1094,7 @@ export const CreateBookingModal: React.FC = () => {
                 <div className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
                   <div className="bg-slate-100/80 px-3 py-1.5 border-b border-slate-200 font-bold text-[11px] text-slate-700 flex items-center justify-between">
                     <span>Charge Items (1)</span>
-                    <span className="text-[10px] text-slate-500 font-mono">Speed Auto ERP Schema</span>
+                    <span className="text-[10px] text-slate-500 font-mono">ERP Schema</span>
                   </div>
                   <table className="w-full text-left text-xs">
                     <thead className="bg-slate-50 text-[10px] font-bold text-slate-500 border-b border-slate-200">
@@ -1231,7 +1237,7 @@ export const CreateBookingModal: React.FC = () => {
                   ) : (
                     <>
                       <Calendar className="w-3.5 h-3.5" />
-                      <span>Create Booking</span>
+                      <span>{bookingModalMode === 'update' ? 'Update Reservation' : 'Create Booking'}</span>
                     </>
                   )}
                 </button>

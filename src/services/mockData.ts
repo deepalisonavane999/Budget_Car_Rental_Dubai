@@ -18,7 +18,7 @@ export const mockCustomer: CustomerProfile = {
   avatarInitials: 'JM',
   isVerified: false,
   mobile: '—',
-  email: 'wajidteste@speedautosystems.com',
+  email: 'wajid.test@budget-uae.com',
   contactCategory: 2,
   locationId: 21,
   locationName: 'Dubai Silicon Oasis',

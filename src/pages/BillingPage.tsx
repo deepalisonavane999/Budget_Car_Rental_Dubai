@@ -896,7 +896,7 @@ export const BillingPage: React.FC = () => {
                             onChange={(e) => setAgreementCustomerId(e.target.value)}
                             placeholder="e.g. 103278"
                             className="px-1.5 py-0.5 bg-white border border-slate-300 rounded text-[10px] text-slate-700 font-mono focus:ring-1 focus:ring-blue-500 w-20"
-                            title="Filter by Speed Auto ERP Customer ID (pre-filled from Customer Details, editable)"
+                            title="Filter by ERP Customer ID (pre-filled from Customer Details, editable)"
                           />
                         </div>
 

@@ -9,6 +9,7 @@ import {
   Clock,
   ChevronDown,
   Car,
+  Edit3,
 } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { apiService } from '../services/apiService';
@@ -20,13 +21,13 @@ import { mockLeadHistory } from '../services/mockDataAccCollection';
 export const ReservationsPage: React.FC = () => {
   const {
     reservationQuote,
+    setReservationQuote,
     checkVehicleAvailability,
-    createReservationBooking,
-    updateReservationBooking,
     confirmReservationBooking,
     cancelReservationBooking,
     setIsFleetPickerOpen,
-    setIsCreateBookingOpen,
+    openCreateBookingModal,
+    openUpdateBookingModal,
     setVehicleGroups,
   } = useWorkspace();
   const [leadHistory] = useState(mockLeadHistory);
@@ -53,7 +54,7 @@ export const ReservationsPage: React.FC = () => {
   };
 
   const handleCreateBooking = () => {
-    setIsCreateBookingOpen(true);
+    openCreateBookingModal();
   };
 
   const handleConfirmBooking = async () => {
@@ -63,11 +64,8 @@ export const ReservationsPage: React.FC = () => {
     triggerNotice(res.message);
   };
 
-  const handleUpdateBooking = async () => {
-    setIsBusy(true);
-    const res = await updateReservationBooking();
-    setIsBusy(false);
-    triggerNotice(res.message);
+  const handleUpdateBooking = () => {
+    openUpdateBookingModal();
   };
 
   const handleCancelBooking = async () => {
@@ -98,12 +96,28 @@ export const ReservationsPage: React.FC = () => {
                 {reservationQuote.quoteNo}
               </span>
               <div className="relative">
-                <select className="pl-1.5 pr-5 py-0.5 bg-slate-50 border border-slate-300 rounded text-[10px] font-semibold text-slate-800 appearance-none focus:ring-1 focus:ring-blue-500">
-                  <option>Quote</option>
-                  <option>Confirmed</option>
+                <select
+                  value={reservationQuote.status || 'Quote'}
+                  onChange={(e) => setReservationQuote((prev) => ({ ...prev, status: e.target.value }))}
+                  className="pl-1.5 pr-5 py-0.5 bg-slate-50 border border-slate-300 rounded text-[10px] font-semibold text-slate-800 appearance-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+                >
+                  <option value="Quote">Quote</option>
+                  <option value="Confirmed">Confirmed</option>
+                  <option value="Active">Active</option>
+                  <option value="Completed">Completed</option>
+                  <option value="Cancelled">Cancelled</option>
                 </select>
                 <ChevronDown className="w-2.5 h-2.5 text-slate-500 absolute right-1 top-1.5 pointer-events-none" />
               </div>
+              <button
+                type="button"
+                onClick={handleUpdateBooking}
+                className="flex items-center space-x-1 px-2 py-0.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded text-[10px] font-bold transition-colors cursor-pointer"
+                title="Edit and update reservation details"
+              >
+                <Edit3 className="w-2.5 h-2.5" />
+                <span>Update</span>
+              </button>
             </div>
           </div>
 
@@ -155,13 +169,19 @@ export const ReservationsPage: React.FC = () => {
           {/* Vehicle Specs & Breakdown */}
           <div className="grid grid-cols-12 gap-2 items-center text-[10px]">
             <div className="col-span-4 flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <div className="w-10 h-9 bg-blue-50 text-blue-600 rounded flex items-center justify-center border border-blue-100 shrink-0">
+              <div
+                onClick={handleCheckAvailability}
+                className="flex items-center space-x-2 cursor-pointer group"
+                title="Click to check vehicle availability and select vehicle"
+              >
+                <div className="w-10 h-9 bg-blue-50 group-hover:bg-blue-100 text-blue-600 rounded flex items-center justify-center border border-blue-100 transition-colors shrink-0">
                   <Car className="w-4 h-4" />
                 </div>
                 <div className="leading-tight">
                   <div className="flex items-center space-x-1.5">
-                    <h3 className="font-bold text-slate-900 text-xs">{reservationQuote.vehicle.model}</h3>
+                    <h3 className="font-bold text-slate-900 text-xs group-hover:text-blue-600 transition-colors">
+                      {reservationQuote.vehicle.model}
+                    </h3>
                     {reservationQuote.vehicle.plateNo && (
                       <span className="font-mono font-bold text-blue-700 bg-blue-50 px-1 py-0.2 rounded border border-blue-200 text-[9px]">
                         {reservationQuote.vehicle.plateNo}
@@ -223,7 +243,7 @@ export const ReservationsPage: React.FC = () => {
             <button
               onClick={handleCreateBooking}
               className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded font-bold flex items-center space-x-1.5 shadow-2xs transition-all cursor-pointer"
-              title="Open Create Booking modal with Speed Auto ERP payload"
+              title="Open Create Booking modal with ERP payload"
             >
               <CalendarPlus className="w-3 h-3 text-white" />
               <span>Create Booking</span>
@@ -238,9 +258,11 @@ export const ReservationsPage: React.FC = () => {
             <button
               onClick={handleUpdateBooking}
               disabled={isBusy}
-              className="px-2 py-0.5 bg-white border border-slate-300 hover:bg-slate-50 disabled:opacity-60 text-slate-700 rounded font-semibold"
+              className="px-2.5 py-1 bg-white border border-blue-300 hover:bg-blue-50 text-blue-700 rounded font-bold flex items-center space-x-1 shadow-2xs transition-all cursor-pointer"
+              title="Open Update Booking modal to modify dates, vehicle, branch or charges"
             >
-              Update
+              <Edit3 className="w-3 h-3 text-blue-600" />
+              <span>Update</span>
             </button>
             <button
               onClick={handleCancelBooking}
