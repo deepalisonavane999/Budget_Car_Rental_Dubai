@@ -11,6 +11,10 @@ import {
   ShieldCheck,
   ChevronDown,
   X,
+  User,
+  Tag,
+  FileText,
+  RotateCcw,
 } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { apiService } from '../services/apiService';
@@ -197,134 +201,159 @@ export const CXPulsePage: React.FC = () => {
 
       {/* Action Drawer 1: Create Lead / Ticket Form */}
       {activeAction === 'create' && (
-        <div className="bg-white border border-blue-200 rounded-xl p-4 shadow-sm mb-3 animate-fade-in shrink-0">
-          <div className="flex items-center space-x-2 pb-2 mb-3 border-b border-slate-100">
-            <div className="p-1.5 bg-blue-50 text-blue-600 rounded-md">
-              <UserPlus className="w-4 h-4" />
+        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs mb-3 animate-fade-in shrink-0">
+          {/* Header */}
+          <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100">
+            <div className="flex items-center space-x-2.5">
+              <div className="w-7 h-7 rounded-lg bg-blue-50 border border-blue-200/80 flex items-center justify-center text-blue-600 shadow-2xs">
+                <UserPlus className="w-3.5 h-3.5" />
+              </div>
+              <div>
+                <h3 className="text-xs font-bold text-slate-900 tracking-tight">
+                  Create CXPulse Ticket
+                </h3>
+                <p className="text-[10px] text-slate-500">
+                  Log customer grievances, inquiries, or support requests directly into CXPulse
+                </p>
+              </div>
             </div>
-            <h3 className="text-xs font-bold text-slate-800">
-              Create CXPulse Ticket
-            </h3>
+
+            <div className="flex items-center space-x-2">
+              <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                Agent: <span className="font-semibold text-slate-800 ml-1">{agentName || 'Agent'}</span>
+              </span>
+              {(customerName || subject || description) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCustomerName(customer.name && customer.name !== '—' ? customer.name : '');
+                    setSubject('');
+                    setDescription('');
+                    setFormErrors({});
+                    setCreateResult(null);
+                  }}
+                  className="flex items-center space-x-1 text-[10px] text-slate-400 hover:text-slate-600 px-2 py-0.5 rounded hover:bg-slate-50 transition-colors cursor-pointer"
+                  title="Reset form fields"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  <span>Reset</span>
+                </button>
+              )}
+            </div>
           </div>
 
           <form onSubmit={handleCreateSubmit} className="space-y-3">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {/* Customer Name */}
-              <div>
-                <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                  Customer Name <span className="text-rose-500">*</span>
+            {/* Form Fields Grid: 2 balanced rows */}
+            <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+              {/* Customer Name (4 cols) */}
+              <div className="sm:col-span-4">
+                <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                  Customer Name <span className="text-rose-500 font-bold">*</span>
                 </label>
-                <input
-                  type="text"
-                  required
-                  value={customerName}
-                  onChange={(e) => {
-                    setCustomerName(e.target.value);
-                    if (formErrors.customerName) setFormErrors((p) => ({ ...p, customerName: '' }));
-                  }}
-                  placeholder="Customer name"
-                  className={`w-full text-xs px-3 py-1.5 border rounded-lg focus:outline-hidden transition-all ${
-                    formErrors.customerName
-                      ? 'border-amber-400 bg-amber-50/20 focus:ring-1 focus:ring-amber-500'
-                      : 'border-slate-300 focus:ring-1 focus:ring-blue-500'
-                  }`}
-                />
-                {formErrors.customerName && (
-                  <div className="mt-1 flex items-center space-x-1.5 px-2.5 py-0.5 bg-amber-50 text-amber-900 border border-amber-300/80 rounded-md text-[11px] font-medium shadow-2xs animate-fade-in w-fit">
-                    <span className="w-3.5 h-3.5 rounded-full bg-amber-500 text-white flex items-center justify-center font-bold text-[9px] shrink-0">!</span>
-                    <span>{formErrors.customerName}</span>
-                  </div>
-                )}
+                <div className="relative">
+                  <User className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2 pointer-events-none" />
+                  <input
+                    type="text"
+                    required
+                    value={customerName}
+                    onChange={(e) => {
+                      setCustomerName(e.target.value);
+                      if (formErrors.customerName) setFormErrors((p) => ({ ...p, customerName: '' }));
+                    }}
+                    placeholder="Customer full name"
+                    className={`w-full text-xs pl-8 pr-3 py-1.5 bg-slate-50/60 border rounded-lg transition-all focus:bg-white focus:outline-hidden ${
+                      formErrors.customerName
+                        ? 'border-amber-400 bg-amber-50/20 focus:ring-2 focus:ring-amber-200'
+                        : 'border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-100'
+                    }`}
+                  />
+                </div>
               </div>
 
-              {/* Subject */}
-              <div className="sm:col-span-2">
-                <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                  Subject <span className="text-rose-500">*</span>
+              {/* Subject (8 cols) */}
+              <div className="sm:col-span-8">
+                <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                  Subject / Summary <span className="text-rose-500 font-bold">*</span>
                 </label>
-                <input
-                  type="text"
-                  required
-                  value={subject}
-                  onChange={(e) => {
-                    setSubject(e.target.value);
-                    if (formErrors.subject) setFormErrors((p) => ({ ...p, subject: '' }));
-                  }}
-                  placeholder="e.g. Deposit Refund Status or Booking Inquiry"
-                  className={`w-full text-xs px-3 py-1.5 border rounded-lg focus:outline-hidden transition-all ${
-                    formErrors.subject
-                      ? 'border-amber-400 bg-amber-50/20 focus:ring-1 focus:ring-amber-500'
-                      : 'border-slate-300 focus:ring-1 focus:ring-blue-500'
-                  }`}
-                />
-                {formErrors.subject && (
-                  <div className="mt-1 flex items-center space-x-1.5 px-2.5 py-0.5 bg-amber-50 text-amber-900 border border-amber-300/80 rounded-md text-[11px] font-medium shadow-2xs animate-fade-in w-fit">
-                    <span className="w-3.5 h-3.5 rounded-full bg-amber-500 text-white flex items-center justify-center font-bold text-[9px] shrink-0">!</span>
-                    <span>{formErrors.subject}</span>
-                  </div>
-                )}
+                <div className="relative">
+                  <Tag className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2 pointer-events-none" />
+                  <input
+                    type="text"
+                    required
+                    value={subject}
+                    onChange={(e) => {
+                      setSubject(e.target.value);
+                      if (formErrors.subject) setFormErrors((p) => ({ ...p, subject: '' }));
+                    }}
+                    placeholder="e.g. Deposit Refund Status or Booking Modification Inquiry"
+                    className={`w-full text-xs pl-8 pr-3 py-1.5 bg-slate-50/60 border rounded-lg transition-all focus:bg-white focus:outline-hidden ${
+                      formErrors.subject
+                        ? 'border-amber-400 bg-amber-50/20 focus:ring-2 focus:ring-amber-200'
+                        : 'border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-100'
+                    }`}
+                  />
+                </div>
               </div>
-            </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-              {/* Priority */}
-              <div>
-                <label className="block text-[11px] font-bold text-slate-700 mb-1">
+              {/* Priority Dropdown (4 cols) */}
+              <div className="sm:col-span-4">
+                <label className="block text-[11px] font-semibold text-slate-700 mb-1">
                   Priority
                 </label>
-                <select
-                  value={priority}
-                  onChange={(e) => setPriority(e.target.value as any)}
-                  className="w-full text-xs px-3 py-1.5 border border-slate-300 rounded-lg bg-white focus:ring-1 focus:ring-blue-500 focus:outline-hidden font-medium cursor-pointer"
-                >
-                  <option value="low">Low</option>
-                  <option value="medium">Medium</option>
-                  <option value="high">High</option>
-                </select>
+                <div className="relative">
+                  <AlertCircle className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2 pointer-events-none" />
+                  <select
+                    value={priority}
+                    onChange={(e) => setPriority(e.target.value as 'low' | 'medium' | 'high')}
+                    className="w-full text-xs pl-8 pr-7 py-1.5 bg-slate-50/60 border border-slate-300 rounded-lg text-slate-800 font-medium focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all appearance-none cursor-pointer outline-hidden"
+                  >
+                    <option value="low">Low Priority</option>
+                    <option value="medium">Medium Priority</option>
+                    <option value="high">High Priority</option>
+                  </select>
+                  <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-2 pointer-events-none" />
+                </div>
               </div>
 
-              {/* Description */}
-              <div className="sm:col-span-3">
-                <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                  Description / Complaint Details <span className="text-rose-500">*</span>
+              {/* Description / Details (8 cols) */}
+              <div className="sm:col-span-8">
+                <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                  Description / Complaint Details <span className="text-rose-500 font-bold">*</span>
                 </label>
-                <textarea
-                  rows={2}
-                  required
-                  value={description}
-                  onChange={(e) => {
-                    setDescription(e.target.value);
-                    if (formErrors.description) setFormErrors((p) => ({ ...p, description: '' }));
-                  }}
-                  placeholder="Enter detailed complaint or request description..."
-                  className={`w-full text-xs px-3 py-1.5 border rounded-lg focus:outline-hidden transition-all ${
-                    formErrors.description
-                      ? 'border-amber-400 bg-amber-50/20 focus:ring-1 focus:ring-amber-500'
-                      : 'border-slate-300 focus:ring-1 focus:ring-blue-500'
-                  }`}
-                />
-                {formErrors.description && (
-                  <div className="mt-1 flex items-center space-x-1.5 px-2.5 py-0.5 bg-amber-50 text-amber-900 border border-amber-300/80 rounded-md text-[11px] font-medium shadow-2xs animate-fade-in w-fit">
-                    <span className="w-3.5 h-3.5 rounded-full bg-amber-500 text-white flex items-center justify-center font-bold text-[9px] shrink-0">!</span>
-                    <span>{formErrors.description}</span>
-                  </div>
-                )}
+                <div className="relative">
+                  <FileText className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2 pointer-events-none" />
+                  <textarea
+                    rows={2}
+                    required
+                    value={description}
+                    onChange={(e) => {
+                      setDescription(e.target.value);
+                      if (formErrors.description) setFormErrors((p) => ({ ...p, description: '' }));
+                    }}
+                    placeholder="Enter detailed description of complaint or customer inquiry..."
+                    className={`w-full text-xs pl-8 pr-3 py-1.5 bg-slate-50/60 border rounded-lg transition-all focus:bg-white focus:outline-hidden resize-none ${
+                      formErrors.description
+                        ? 'border-amber-400 bg-amber-50/20 focus:ring-2 focus:ring-amber-200'
+                        : 'border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-100'
+                    }`}
+                  />
+                </div>
               </div>
             </div>
 
-            {/* Submit Action */}
-            <div className="flex items-center justify-between pt-1">
+            {/* Submit Action Footer */}
+            <div className="flex items-center justify-between pt-2 border-t border-slate-100">
               <div className="text-xs">
                 {createResult && (
                   <div
-                    className={`flex items-center space-x-1.5 font-medium ${
-                      createResult.success ? 'text-emerald-700' : 'text-rose-600'
+                    className={`flex items-center space-x-1.5 font-medium px-2.5 py-1 rounded-lg ${
+                      createResult.success ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'
                     }`}
                   >
                     {createResult.success ? (
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                     ) : (
-                      <AlertCircle className="w-4 h-4 text-rose-600" />
+                      <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
                     )}
                     <span>{createResult.message}</span>
                   </div>
@@ -334,12 +363,12 @@ export const CXPulsePage: React.FC = () => {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold transition-all shadow-xs flex items-center space-x-1.5 cursor-pointer"
+                className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold transition-all shadow-xs flex items-center space-x-1.5 cursor-pointer ml-auto"
               >
                 {isSubmitting ? (
                   <>
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    <span>Creating Ticket...</span>
+                    <span>Submitting...</span>
                   </>
                 ) : (
                   <>
@@ -355,37 +384,47 @@ export const CXPulsePage: React.FC = () => {
 
       {/* Action Drawer 2: Ticket Status Lookup Form */}
       {activeAction === 'status' && (
-        <div className="bg-white border border-blue-200 rounded-xl p-4 shadow-sm mb-3 animate-fade-in shrink-0">
-          <div className="flex items-center space-x-2 pb-2 mb-3 border-b border-slate-100">
-            <div className="p-1.5 bg-blue-50 text-blue-600 rounded-md">
-              <Search className="w-4 h-4" />
+        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs mb-3 animate-fade-in shrink-0">
+          <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100">
+            <div className="flex items-center space-x-2.5">
+              <div className="w-7 h-7 rounded-lg bg-blue-50 border border-blue-200/80 flex items-center justify-center text-blue-600 shadow-2xs">
+                <Search className="w-3.5 h-3.5" />
+              </div>
+              <div>
+                <h3 className="text-xs font-bold text-slate-900 tracking-tight">
+                  Check CXPulse Ticket Status
+                </h3>
+                <p className="text-[10px] text-slate-500">
+                  Search live ticket status, assignment, and SLA metrics
+                </p>
+              </div>
             </div>
-            <h3 className="text-xs font-bold text-slate-800">
-              Check CXPulse Ticket Status
-            </h3>
           </div>
 
-          <form onSubmit={handleStatusLookup} className="space-y-1">
-            <div className="flex items-center space-x-2">
-              <input
-                type="text"
-                required
-                value={lookupTicketId}
-                onChange={(e) => {
-                  setLookupTicketId(e.target.value);
-                  if (lookupError) setLookupError(null);
-                }}
-                placeholder="e.g. TKT-2026-11-0019 or TKT-2026-09-0003"
-                className={`flex-1 text-xs px-3 py-1.5 border rounded-lg focus:outline-hidden font-mono transition-all ${
-                  lookupError
-                    ? 'border-amber-400 bg-amber-50/20 focus:ring-1 focus:ring-amber-500'
-                    : 'border-slate-300 focus:ring-1 focus:ring-blue-500'
-                }`}
-              />
+          <form onSubmit={handleStatusLookup} className="space-y-2">
+            <div className="flex items-center space-x-2 max-w-xl">
+              <div className="relative flex-1">
+                <Tag className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2 pointer-events-none" />
+                <input
+                  type="text"
+                  required
+                  value={lookupTicketId}
+                  onChange={(e) => {
+                    setLookupTicketId(e.target.value);
+                    if (lookupError) setLookupError(null);
+                  }}
+                  placeholder="e.g. TKT-2026-11-0019 or TKT-2026-09-0003"
+                  className={`w-full text-xs pl-8 pr-3 py-1.5 bg-slate-50/60 border rounded-lg font-mono transition-all focus:bg-white focus:outline-hidden ${
+                    lookupError
+                      ? 'border-amber-400 bg-amber-50/20 focus:ring-2 focus:ring-amber-200'
+                      : 'border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-100'
+                  }`}
+                />
+              </div>
               <button
                 type="submit"
                 disabled={isFetchingStatus}
-                className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold transition-all shadow-xs flex items-center space-x-1.5 cursor-pointer"
+                className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold transition-all shadow-xs flex items-center space-x-1.5 cursor-pointer shrink-0"
               >
                 {isFetchingStatus ? (
                   <>
@@ -400,21 +439,15 @@ export const CXPulsePage: React.FC = () => {
                 )}
               </button>
             </div>
-            {lookupError && (
-              <div className="mt-1 flex items-center space-x-1.5 px-2.5 py-0.5 bg-amber-50 text-amber-900 border border-amber-300/80 rounded-md text-[11px] font-medium shadow-2xs animate-fade-in w-fit">
-                <span className="w-3.5 h-3.5 rounded-full bg-amber-500 text-white flex items-center justify-center font-bold text-[9px] shrink-0">!</span>
-                <span>{lookupError}</span>
-              </div>
-            )}
           </form>
 
           {/* Status Result Card */}
           {statusResult && (
             <div className="mt-3 pt-3 border-t border-slate-100">
               {statusResult.success && statusResult.data ? (
-                <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="bg-slate-50/80 border border-slate-200 rounded-xl p-3 text-xs grid grid-cols-2 sm:grid-cols-4 gap-3">
                   <div>
-                    <span className="text-[10px] text-slate-400 uppercase font-semibold block">
+                    <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wide block">
                       Ticket No.
                     </span>
                     <span className="font-mono font-bold text-blue-700">
@@ -423,35 +456,35 @@ export const CXPulsePage: React.FC = () => {
                   </div>
 
                   <div>
-                    <span className="text-[10px] text-slate-400 uppercase font-semibold block">
+                    <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wide block">
                       Status
                     </span>
-                    <span className="font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 inline-block">
+                    <span className="font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 inline-block text-[11px]">
                       {statusResult.data.status || 'Active'}
                     </span>
                   </div>
 
                   <div>
-                    <span className="text-[10px] text-slate-400 uppercase font-semibold block">
+                    <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wide block">
                       Priority / Dept
                     </span>
-                    <span className="font-medium text-slate-700">
-                      {statusResult.data.priority || 'high'} • {statusResult.data.department || 'CRM'}
+                    <span className="font-semibold text-slate-700 capitalize">
+                      {statusResult.data.priority || 'High'} • {statusResult.data.department || 'CRM'}
                     </span>
                   </div>
 
                   <div>
-                    <span className="text-[10px] text-slate-400 uppercase font-semibold block">
+                    <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wide block">
                       SLA Status
                     </span>
-                    <span className={`font-medium ${statusResult.data.slaBreached ? 'text-rose-600' : 'text-emerald-600'}`}>
+                    <span className={`font-semibold ${statusResult.data.slaBreached ? 'text-rose-600' : 'text-emerald-600'}`}>
                       {statusResult.data.slaBreached ? 'Breached' : 'On Target'}
                     </span>
                   </div>
                 </div>
               ) : (
-                <div className="text-xs text-rose-600 font-medium flex items-center space-x-1.5">
-                  <AlertCircle className="w-4 h-4 text-rose-500" />
+                <div className="text-xs text-rose-600 font-medium flex items-center space-x-1.5 bg-rose-50 border border-rose-200 rounded-lg p-2.5">
+                  <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
                   <span>{statusResult.message}</span>
                 </div>
               )}

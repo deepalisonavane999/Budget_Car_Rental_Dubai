@@ -374,7 +374,7 @@ export class BudgetApiService {
   constructor() {
     this.baseUrl =
       import.meta.env.VITE_API_BASE_URL ||
-      (import.meta.env.DEV ? '/speed-api/' : DEFAULT_BASE_URL);
+      (typeof window !== 'undefined' ? '/speed-api/' : DEFAULT_BASE_URL);
     this.code = import.meta.env.VITE_API_CODE || DEFAULT_CODE;
     this.apiKey = import.meta.env.VITE_API_KEY || DEFAULT_API_KEY;
   }
@@ -675,9 +675,10 @@ export class BudgetApiService {
       'cxp_JMvbX3fu2kPQyKHxeVyM8Hb09XJaDCvq0CjQTqgaJKY',
     ];
 
-    const endpoint = import.meta.env.DEV
-      ? '/cxpulse-api/api/integration/v1/tickets'
-      : 'https://cxpulse.agmcgroup.ae/api/integration/v1/tickets';
+    const endpoint =
+      typeof window !== 'undefined'
+        ? '/cxpulse-api/api/integration/v1/tickets'
+        : 'https://cxpulse.agmcgroup.ae/api/integration/v1/tickets';
 
     let lastError = '';
     let lastData = null;
@@ -732,9 +733,10 @@ export class BudgetApiService {
     ticketId: string
   ): Promise<{ success: boolean; data?: any; error?: string }> {
     const apiKey = 'cxp_JMvbX3fu2kPQyKHxeVyM8Hb09XJaDCvq0CjQTqgaJKY';
-    const endpoint = import.meta.env.DEV
-      ? `/cxpulse-api/api/integration/v1/tickets/${encodeURIComponent(ticketId)}`
-      : `https://cxpulse.agmcgroup.ae/api/integration/v1/tickets/${encodeURIComponent(ticketId)}`;
+    const endpoint =
+      typeof window !== 'undefined'
+        ? `/cxpulse-api/api/integration/v1/tickets/${encodeURIComponent(ticketId)}`
+        : `https://cxpulse.agmcgroup.ae/api/integration/v1/tickets/${encodeURIComponent(ticketId)}`;
 
     try {
       const res = await fetch(endpoint, {

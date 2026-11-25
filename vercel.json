@@ -1,0 +1,32 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    {
+      "source": "/speed-api/:path*",
+      "destination": "https://speedapi-budgetgensys-grgacxg8grhvh2cs.uaenorth-01.azurewebsites.net/api/:path*"
+    },
+    {
+      "source": "/cxpulse-api/:path*",
+      "destination": "https://cxpulse.agmcgroup.ae/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "X-XSS-Protection",
+          "value": "1; mode=block"
+        }
+      ]
+    }
+  ]
+}
