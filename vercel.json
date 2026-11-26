@@ -3,7 +3,7 @@
   "rewrites": [
     {
       "source": "/speed-api/:path*",
-      "destination": "/api/speed-proxy?path=:path*"
+      "destination": "https://speedapi-budgetgensys-grgacxg8grhvh2cs.uaenorth-01.azurewebsites.net/api/:path*"
     },
     {
       "source": "/cxpulse-api/:path*",

@@ -35,10 +35,8 @@ export default async function handler(req, res) {
       'User-Agent': 'PostmanRuntime/7.39.0',
     };
 
-    // Server-side secret key from Vercel environment variables, fallback to client header if passed
-    const apiKey = req.headers['x-api-key'] || process.env.CXPULSE_API_KEY || process.env.VITE_CXPULSE_API_KEY || '';
-    if (apiKey) {
-      headers['X-API-Key'] = apiKey;
+    if (req.headers['x-api-key']) {
+      headers['X-API-Key'] = req.headers['x-api-key'];
     }
 
     const fetchOptions = {

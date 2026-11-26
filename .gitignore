@@ -6,8 +6,3 @@ dist-ssr
 .idea
 *.log
 *.zip
-
-# Environment & Secret files - NEVER commit real credentials to public git
-.env
-.env.*
-!.env.example

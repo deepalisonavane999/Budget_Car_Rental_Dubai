@@ -10,17 +10,13 @@ A pixel-perfect, high-performance **React + Vite + Tailwind CSS** implementation
 # 1. Install dependencies
 npm install
 
-# 2. Configure local environment variables (Required for live Speed & CXPulse APIs)
-# Copy the template and fill in your keys (kept private and git-ignored):
-cp .env.example .env.local
-
-# 3. Start Vite development server
+# 2. Start Vite development server
 npm run dev
 
-# 4. Build for production (TypeScript + Vite bundle)
+# 3. Build for production (TypeScript + Vite bundle)
 npm run build
 
-# 5. Preview production build
+# 4. Preview production build
 npm run preview
 ```
 

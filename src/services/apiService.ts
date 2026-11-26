@@ -363,8 +363,8 @@ export interface BookingTransactionPayload {
 }
 
 const DEFAULT_BASE_URL = 'https://speedapi-budgetgensys-grgacxg8grhvh2cs.uaenorth-01.azurewebsites.net/api/';
-const DEFAULT_CODE = '';
-const DEFAULT_API_KEY = '';
+const DEFAULT_CODE = 'Q0v3wAs_N1IY-j9J_N-v3vGOT637kyC698U0zuUlssrqAzFuNubk5A==';
+const DEFAULT_API_KEY = 'hLlMiyHLx89ZktLpSMXg7HcjobK8gmuWuKwNhQokTsY%3D';
 
 export class BudgetApiService {
   private baseUrl: string;
@@ -389,25 +389,18 @@ export class BudgetApiService {
 
   private buildUrl(endpoint: string): string {
     const cleanBase = this.baseUrl.endsWith('/') ? this.baseUrl : `${this.baseUrl}/`;
-    if (this.code) {
-      return `${cleanBase}${endpoint}?code=${encodeURIComponent(this.code)}`;
-    }
-    return `${cleanBase}${endpoint}`;
+    return `${cleanBase}${endpoint}?code=${encodeURIComponent(this.code)}`;
   }
 
   private async request<T>(endpoint: string, body: Record<string, any> = {}): Promise<ApiResponse<T>> {
     const url = this.buildUrl(endpoint);
     try {
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
-      if (this.apiKey) {
-        headers['ApiKey'] = this.apiKey;
-      }
-
       const response = await fetch(url, {
         method: 'POST',
-        headers,
+        headers: {
+          'Content-Type': 'application/json',
+          'ApiKey': this.apiKey,
+        },
         body: JSON.stringify(body),
       });
 
@@ -669,7 +662,6 @@ export class BudgetApiService {
 
   /**
    * CXPulse Integration APIs
-   * Keys are attached securely by proxy (Vite local proxy / Vercel Serverless Function)
    */
   public async createCXPulseTicket(payload: {
     customerName: string;
@@ -677,66 +669,81 @@ export class BudgetApiService {
     description: string;
     priority: 'low' | 'medium' | 'high';
   }): Promise<{ success: boolean; data?: any; error?: string }> {
+    // Keys from Postman collection: request header key + collection auth key
+    const candidateKeys = [
+      'sk-TqK7DAFxyt6jMTbY0jemlZtkjdzmPMAJnoQvLx6xqoA',
+      'cxp_JMvbX3fu2kPQyKHxeVyM8Hb09XJaDCvq0CjQTqgaJKY',
+    ];
+
     const endpoint =
       typeof window !== 'undefined'
         ? '/cxpulse-api/api/integration/v1/tickets'
         : 'https://cxpulse.agmcgroup.ae/api/integration/v1/tickets';
 
-    const clientKey = import.meta.env.VITE_CXPULSE_API_KEY || '';
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-    if (clientKey) {
-      headers['X-API-Key'] = clientKey;
-    }
+    let lastError = '';
+    let lastData = null;
 
-    try {
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(payload),
-      });
+    for (const apiKey of candidateKeys) {
+      try {
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-API-Key': apiKey,
+          },
+          body: JSON.stringify(payload),
+        });
 
-      const data = await res.json().catch(() => null);
+        const data = await res.json().catch(() => null);
+        console.log(`[CXPulse] Key ${apiKey.substring(0, 10)}... status:`, res.status, data);
 
-      if (res.ok) {
+        if (res.ok) {
+          return {
+            success: true,
+            data,
+          };
+        }
+
+        lastError = data?.message || data?.error || `HTTP ${res.status}: Failed to create ticket`;
+        lastData = data;
+
+        // If 401 or 403, attempt with next key
+        if (res.status === 401 || res.status === 403) {
+          continue;
+        }
+
         return {
-          success: true,
-          data,
+          success: false,
+          error: lastError,
+          data: lastData,
         };
+      } catch (err: any) {
+        lastError = err.message || 'Network error connecting to CXPulse API';
       }
-
-      return {
-        success: false,
-        error: data?.message || data?.error || `HTTP ${res.status}: Failed to create ticket`,
-        data,
-      };
-    } catch (err: any) {
-      return {
-        success: false,
-        error: err.message || 'Network error connecting to CXPulse API',
-      };
     }
+
+    return {
+      success: false,
+      error: lastError || 'Failed to create ticket in CXPulse',
+      data: lastData,
+    };
   }
 
   public async getCXPulseTicketStatus(
     ticketId: string
   ): Promise<{ success: boolean; data?: any; error?: string }> {
+    const apiKey = 'cxp_JMvbX3fu2kPQyKHxeVyM8Hb09XJaDCvq0CjQTqgaJKY';
     const endpoint =
       typeof window !== 'undefined'
         ? `/cxpulse-api/api/integration/v1/tickets/${encodeURIComponent(ticketId)}`
         : `https://cxpulse.agmcgroup.ae/api/integration/v1/tickets/${encodeURIComponent(ticketId)}`;
 
-    const clientKey = import.meta.env.VITE_CXPULSE_API_KEY || '';
-    const headers: Record<string, string> = {};
-    if (clientKey) {
-      headers['X-API-Key'] = clientKey;
-    }
-
     try {
       const res = await fetch(endpoint, {
         method: 'GET',
-        headers,
+        headers: {
+          'X-API-Key': apiKey,
+        },
       });
 
       const data = await res.json().catch(() => null);
