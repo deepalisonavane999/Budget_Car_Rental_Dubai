@@ -540,7 +540,7 @@ export const collectionVouchersResponse: { totalCount: number; items: (VoucherIt
       isClosed: true,
       dueAmount: 0,
       statusText: 'Closed',
-      url: 'https://budgetrac-vls-test-enfma6dzczatbmfx.uaenorth-01.azurewebsites.net/Reports?Abp.Localization.CultureName=en#/printInvoice/hLlMiyHLx89ZktLpSMXg7IcggzF_2FXRKclK_2BDY6xJEIo%3D',
+      url: 'https://budgetrac-vls-test-enfma6dzczatbmfx.uaenorth-01.azurewebsites.net/Reports?Abp.Localization.CultureName=en#/printInvoice/MOCK_REPORT_INVOICE_TOKEN',
     },
     {
       id: 1502859,
@@ -555,7 +555,7 @@ export const collectionVouchersResponse: { totalCount: number; items: (VoucherIt
       isClosed: true,
       dueAmount: 0,
       statusText: 'Closed',
-      url: 'https://budgetrac-vls-test-enfma6dzczatbmfx.uaenorth-01.azurewebsites.net/Reports?Abp.Localization.CultureName=en#/printInvoice/hLlMiyHLx89ZktLpSMXg7FCr45oB3NlSmBtkVQv9zZs%3D',
+      url: 'https://budgetrac-vls-test-enfma6dzczatbmfx.uaenorth-01.azurewebsites.net/Reports?Abp.Localization.CultureName=en#/printInvoice/MOCK_REPORT_CREDITNOTE_TOKEN',
     },
     {
       id: 1515890,

@@ -13,7 +13,7 @@
         "header": [
           {
             "key": "X-API-Key",
-            "value": "sk-TqK7DAFxyt6jMTbY0jemlZtkjdzmPMAJnoQvLx6xqoA"
+            "value": "{{CXPULSE_API_KEY}}"
           }
         ],
         "body": {
@@ -42,7 +42,7 @@
           "query": [
             {
               "key": "X-API-Key",
-              "value": "sk-qlwM0suxUq7FA501YOc0xR1AQXxVELzpBKbJQPJn",
+              "value": "{{CXPULSE_API_KEY}}",
               "disabled": true
             }
           ]
@@ -57,7 +57,7 @@
         "header": [
           {
             "key": "X-API-Key",
-            "value": "sk-TqK7DAFxyt6jMTbY0jemlZtkjdzmPMAJnoQvLx6xqoA"
+            "value": "{{CXPULSE_API_KEY}}"
           }
         ],
         "url": {
@@ -85,7 +85,7 @@
     "apikey": [
       {
         "key": "key",
-        "value": "cxp_JMvbX3fu2kPQyKHxeVyM8Hb09XJaDCvq0CjQTqgaJKY",
+        "value": "{{CXPULSE_API_KEY}}",
         "type": "string"
       }
     ]
