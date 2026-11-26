@@ -734,9 +734,9 @@ export const BillingPage: React.FC = () => {
                 ) : (
                   /* Rental Agreements & Billing Stepper Flow */
                   <div className="space-y-2 animate-fade-in">
-                    {/* Stepper Tabs Bar (Direct Tab Navigation) */}
+                    {/* Stepper Tabs Bar (Direct Tab Navigation - No connecting line) */}
                     <div className="border-b border-slate-200 pb-3 pt-1 px-1">
-                      <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center justify-start gap-8 sm:gap-12 flex-wrap">
                     
                     {/* Item 1: Rental Agreements */}
                     <div
@@ -773,14 +773,9 @@ export const BillingPage: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Connecting Line 1 -> 2 */}
-                    <div className={`flex-1 h-px self-center transition-colors ${
-                      lowerTab === 'vouchers' || lowerTab === 'invoice_lines' ? 'bg-blue-500' : 'bg-slate-200'
-                    }`}></div>
-
                     {/* Item 2: Vouchers (Payment Receipts) */}
                     <div
-                      onClick={() => (lowerTab === 'vouchers' || lowerTab === 'invoice_lines') && setLowerTab('vouchers')}
+                      onClick={() => lowerTab !== 'bookings' && setLowerTab('vouchers')}
                       className={`flex items-center space-x-2.5 select-none transition-all ${
                         lowerTab === 'bookings'
                           ? 'opacity-40 cursor-default'
@@ -788,7 +783,7 @@ export const BillingPage: React.FC = () => {
                           ? 'opacity-100 cursor-pointer'
                           : 'opacity-80 hover:opacity-100 cursor-pointer'
                       }`}
-                      title={lowerTab === 'bookings' ? 'Select an agreement from the list below to view payment vouchers' : undefined}
+                      title={lowerTab === 'bookings' ? 'Select an agreement from the list below to view vouchers' : 'Click to view payment vouchers & receipts'}
                     >
                       <div
                         className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs shrink-0 transition-all ${
@@ -812,27 +807,24 @@ export const BillingPage: React.FC = () => {
                           }`}>
                             Vouchers (Payment Receipts)
                           </span>
-                          {selectedAgreementNo && lowerTab !== 'bookings' && (
+                          {lowerTab !== 'bookings' && (
                             <span className="text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.2 rounded-full font-mono font-medium">
                               {selectedAgreementVouchers.length}
                             </span>
                           )}
                         </div>
-                        <p className="text-[10px] text-slate-500 leading-tight mt-0.5">
+                        <p className={`text-[10px] leading-tight mt-0.5 ${
+                          lowerTab === 'bookings' ? 'text-slate-400' : 'text-slate-500'
+                        }`}>
                           Payment receipts &amp; refunds
                         </p>
                       </div>
                     </div>
 
-                    {/* Connecting Line 2 -> 3 */}
-                    <div className={`flex-1 h-px self-center transition-colors ${
-                      lowerTab === 'invoice_lines' ? 'bg-blue-500' : 'bg-slate-200'
-                    }`}></div>
-
                     {/* Item 3: Invoices (Amounts Charged) */}
                     <div
                       onClick={async () => {
-                        if (selectedAgreementNo) {
+                        if (lowerTab !== 'bookings') {
                           if (billingSummary.invoiceNo && selectedInvoiceLines.length === 0) {
                             await fetchInvoiceDetails(billingSummary.invoiceNo);
                           }
@@ -840,17 +832,21 @@ export const BillingPage: React.FC = () => {
                         }
                       }}
                       className={`flex items-center space-x-2.5 select-none transition-all ${
-                        !selectedAgreementNo
-                          ? 'opacity-40 cursor-not-allowed'
-                          : 'opacity-100 cursor-pointer hover:opacity-90'
+                        lowerTab === 'bookings'
+                          ? 'opacity-40 cursor-default'
+                          : lowerTab === 'invoice_lines'
+                          ? 'opacity-100 cursor-pointer'
+                          : 'opacity-80 hover:opacity-100 cursor-pointer'
                       }`}
-                      title={!selectedAgreementNo ? 'Select an agreement first to view invoice charges' : 'Click to view itemized invoice charges'}
+                      title={lowerTab === 'bookings' ? 'Select an agreement from the list below to view invoice charges' : 'Click to view itemized invoice charges'}
                     >
                       <div
                         className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs shrink-0 transition-all ${
-                          lowerTab === 'invoice_lines'
+                          lowerTab === 'bookings'
+                            ? 'bg-slate-100 text-slate-400 border border-slate-200'
+                            : lowerTab === 'invoice_lines'
                             ? 'bg-blue-600 text-white shadow-xs ring-2 ring-blue-100'
-                            : 'bg-slate-100 text-slate-600 border border-slate-200'
+                            : 'bg-slate-100 text-slate-700 border border-slate-200'
                         }`}
                       >
                         3
@@ -858,17 +854,23 @@ export const BillingPage: React.FC = () => {
                       <div className="text-left">
                         <div className="flex items-center space-x-1.5">
                           <span className={`text-xs font-bold leading-tight ${
-                            lowerTab === 'invoice_lines' ? 'text-blue-600 font-bold' : 'text-slate-700'
+                            lowerTab === 'invoice_lines'
+                              ? 'text-blue-600 font-bold'
+                              : lowerTab === 'bookings'
+                              ? 'text-slate-400'
+                              : 'text-slate-800'
                           }`}>
                             Invoices (Amounts Charged)
                           </span>
-                          {selectedAgreementNo && (
+                          {lowerTab !== 'bookings' && (
                             <span className="text-[10px] bg-emerald-50 text-emerald-700 px-1.5 py-0.2 rounded-full font-mono font-medium">
-                              {selectedInvoiceLines.length > 0 ? selectedInvoiceLines.length : '1'}
+                              {selectedInvoiceLines.length > 0 ? selectedInvoiceLines.length : 5}
                             </span>
                           )}
                         </div>
-                        <p className="text-[10px] text-slate-500 leading-tight mt-0.5">
+                        <p className={`text-[10px] leading-tight mt-0.5 ${
+                          lowerTab === 'bookings' ? 'text-slate-400' : 'text-slate-500'
+                        }`}>
                           Itemized lines &amp; charges
                         </p>
                       </div>

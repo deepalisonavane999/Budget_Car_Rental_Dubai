@@ -443,7 +443,13 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     : 'rentals';
 
   const setActiveNavTab = (tab: string) => {
-    navigate(`/${tab}${location.search}`);
+    const params = new URLSearchParams(location.search);
+    if (tab !== 'operations') {
+      params.delete('op');
+      params.delete('plate');
+    }
+    const query = params.toString();
+    navigate(`/${tab}${query ? `?${query}` : ''}`);
   };
 
   const commParam = searchParams.get('comm') as CommMode;
@@ -495,6 +501,23 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       return next;
     });
   };
+
+  // Automatically clean up operations-specific parameters ('op' and 'plate') when not on the operations page
+  useEffect(() => {
+    if (currentPath !== 'operations') {
+      if (searchParams.has('op') || searchParams.has('plate')) {
+        setSearchParams(
+          (prev) => {
+            const next = new URLSearchParams(prev);
+            next.delete('op');
+            next.delete('plate');
+            return next;
+          },
+          { replace: true }
+        );
+      }
+    }
+  }, [currentPath, searchParams, setSearchParams]);
 
 
   const lastFetchedUrlKeyRef = useRef<string | null>(null);

@@ -15,6 +15,8 @@ import {
   Tag,
   FileText,
   RotateCcw,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { apiService } from '../services/apiService';
@@ -43,6 +45,18 @@ export const CXPulsePage: React.FC = () => {
   // Status Lookup Form State
   const [lookupTicketId, setLookupTicketId] = useState('');
   const [lookupError, setLookupError] = useState<string | null>(null);
+
+  // Copy feedback state
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  const handleCopy = (text: string, key?: string) => {
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    setCopiedKey(key || text);
+    setTimeout(() => {
+      setCopiedKey(null);
+    }, 2000);
+  };
   const [isFetchingStatus, setIsFetchingStatus] = useState(false);
   const [statusResult, setStatusResult] = useState<{
     success: boolean;
@@ -97,7 +111,7 @@ export const CXPulsePage: React.FC = () => {
       const tNum = res.data.ticketNumber || res.data.ticketId || '';
       setCreateResult({
         success: true,
-        message: `Ticket ${tNum} successfully created in CXPulse!`,
+        message: `Ticket ${tNum}`,
         ticketNumber: tNum,
         data: res.data,
       });
@@ -174,29 +188,31 @@ export const CXPulsePage: React.FC = () => {
           </button>
         </div>
 
-        {/* Right: Quick actions for the embedded portal */}
-        <div className="flex items-center space-x-2 text-xs">
-          <button
-            type="button"
-            onClick={() => setIframeKey((k) => k + 1)}
-            className="flex items-center space-x-1 px-2.5 py-1 text-slate-600 hover:text-blue-600 hover:bg-slate-50 rounded-lg font-medium transition-colors cursor-pointer"
-            title="Reload Frame"
-          >
-            <RefreshCw className="w-3 h-3" />
-            <span className="hidden sm:inline">Reload</span>
-          </button>
+        {/* Right: Quick actions for the embedded portal (Only when Create Ticket is active) */}
+        {activeAction === 'create' && (
+          <div className="flex items-center space-x-2 text-xs">
+            <button
+              type="button"
+              onClick={() => setIframeKey((k) => k + 1)}
+              className="flex items-center space-x-1 px-2.5 py-1 text-slate-600 hover:text-blue-600 hover:bg-slate-50 rounded-lg font-medium transition-colors cursor-pointer"
+              title="Reload Frame"
+            >
+              <RefreshCw className="w-3 h-3" />
+              <span className="hidden sm:inline">Reload</span>
+            </button>
 
-          <a
-            href={iframeUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center space-x-1 px-2.5 py-1 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg font-medium transition-colors"
-            title="Open in new window"
-          >
-            <span className="hidden sm:inline">Open in Tab</span>
-            <ExternalLink className="w-3 h-3" />
-          </a>
-        </div>
+            <a
+              href={iframeUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center space-x-1 px-2.5 py-1 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg font-medium transition-colors"
+              title="Open in new window"
+            >
+              <span className="hidden sm:inline">Open in Tab</span>
+              <ExternalLink className="w-3 h-3" />
+            </a>
+          </div>
+        )}
       </div>
 
       {/* Action Drawer 1: Create Lead / Ticket Form */}
@@ -307,9 +323,9 @@ export const CXPulsePage: React.FC = () => {
                     onChange={(e) => setPriority(e.target.value as 'low' | 'medium' | 'high')}
                     className="w-full text-xs pl-8 pr-7 py-1.5 bg-slate-50/60 border border-slate-300 rounded-lg text-slate-800 font-medium focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all appearance-none cursor-pointer outline-hidden"
                   >
-                    <option value="low">Low Priority</option>
-                    <option value="medium">Medium Priority</option>
-                    <option value="high">High Priority</option>
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
                   </select>
                   <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-2 pointer-events-none" />
                 </div>
@@ -346,7 +362,7 @@ export const CXPulsePage: React.FC = () => {
               <div className="text-xs">
                 {createResult && (
                   <div
-                    className={`flex items-center space-x-1.5 font-medium px-2.5 py-1 rounded-lg ${
+                    className={`flex items-center space-x-2 font-medium px-2.5 py-1 rounded-lg ${
                       createResult.success ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'
                     }`}
                   >
@@ -355,7 +371,24 @@ export const CXPulsePage: React.FC = () => {
                     ) : (
                       <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
                     )}
-                    <span>{createResult.message}</span>
+                    <span className="select-text font-semibold">{createResult.message}</span>
+                    {createResult.success && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const tNo = createResult.ticketNumber || createResult.message.replace(/^Ticket\s*/, '').trim();
+                          handleCopy(tNo, 'created-ticket');
+                        }}
+                        className="p-1 rounded-md bg-white hover:bg-emerald-100 text-emerald-700 border border-emerald-300 transition-all shadow-2xs cursor-pointer flex items-center justify-center"
+                        title="Copy ticket number"
+                      >
+                        {copiedKey === 'created-ticket' ? (
+                          <Check className="w-3.5 h-3.5 text-emerald-600" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5 text-emerald-600 hover:text-emerald-800" />
+                        )}
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -384,7 +417,7 @@ export const CXPulsePage: React.FC = () => {
 
       {/* Action Drawer 2: Ticket Status Lookup Form */}
       {activeAction === 'status' && (
-        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs mb-3 animate-fade-in shrink-0">
+        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs mb-3 animate-fade-in flex-1 overflow-y-auto">
           <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100">
             <div className="flex items-center space-x-2.5">
               <div className="w-7 h-7 rounded-lg bg-blue-50 border border-blue-200/80 flex items-center justify-center text-blue-600 shadow-2xs">
@@ -445,14 +478,31 @@ export const CXPulsePage: React.FC = () => {
           {statusResult && (
             <div className="mt-3 pt-3 border-t border-slate-100">
               {statusResult.success && statusResult.data ? (
-                <div className="bg-slate-50/80 border border-slate-200 rounded-xl p-3 text-xs grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="bg-slate-50/80 border border-slate-200 rounded-xl p-3 text-xs grid grid-cols-2 sm:grid-cols-5 gap-3">
                   <div>
                     <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wide block">
                       Ticket No.
                     </span>
-                    <span className="font-mono font-bold text-blue-700">
-                      {statusResult.data.ticketNumber || lookupTicketId}
-                    </span>
+                    <div className="flex items-center space-x-1.5 mt-0.5">
+                      <span className="font-mono font-bold text-blue-700 select-text">
+                        {statusResult.data.ticketNumber || lookupTicketId}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const t = statusResult.data.ticketNumber || lookupTicketId;
+                          handleCopy(t, 'lookup-ticket');
+                        }}
+                        className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors cursor-pointer"
+                        title="Copy ticket number"
+                      >
+                        {copiedKey === 'lookup-ticket' ? (
+                          <Check className="w-3 h-3 text-emerald-600" />
+                        ) : (
+                          <Copy className="w-3 h-3" />
+                        )}
+                      </button>
+                    </div>
                   </div>
 
                   <div>
@@ -466,10 +516,19 @@ export const CXPulsePage: React.FC = () => {
 
                   <div>
                     <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wide block">
-                      Priority / Dept
+                      Priority
                     </span>
-                    <span className="font-semibold text-slate-700 capitalize">
-                      {statusResult.data.priority || 'High'} • {statusResult.data.department || 'CRM'}
+                    <span className="font-semibold text-slate-700 capitalize text-[11px]">
+                      {statusResult.data.priority || 'High'}
+                    </span>
+                  </div>
+
+                  <div>
+                    <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wide block">
+                      Department
+                    </span>
+                    <span className="font-semibold text-slate-700 uppercase text-[11px]">
+                      {statusResult.data.department || 'CRM'}
                     </span>
                   </div>
 
@@ -493,17 +552,19 @@ export const CXPulsePage: React.FC = () => {
         </div>
       )}
 
-      {/* Embedded Iframe Below that with https://cxpulse.agmcgroup.ae/login */}
-      <div className="flex-1 w-full h-full bg-white border border-slate-200 rounded-xl shadow-2xs overflow-hidden relative">
-        <iframe
-          key={iframeKey}
-          src={iframeUrl}
-          title="CX Pulse"
-          height="100%"
-          width="100%"
-          style={{ overflow: 'auto', border: 'none', minHeight: '100%' }}
-        />
-      </div>
+      {/* Embedded Iframe Below that - Only displayed on 'Create Ticket' */}
+      {activeAction === 'create' && (
+        <div className="flex-1 w-full h-full bg-white border border-slate-200 rounded-xl shadow-2xs overflow-hidden relative">
+          <iframe
+            key={iframeKey}
+            src={iframeUrl}
+            title="CX Pulse"
+            height="100%"
+            width="100%"
+            style={{ overflow: 'auto', border: 'none', minHeight: '100%' }}
+          />
+        </div>
+      )}
     </div>
   );
 };

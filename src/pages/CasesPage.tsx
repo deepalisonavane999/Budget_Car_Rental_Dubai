@@ -10,6 +10,8 @@ import {
   Send,
   MoreHorizontal,
   ChevronDown,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { Badge } from '../components/common/Badge';
@@ -30,6 +32,14 @@ export const CasesPage: React.FC = () => {
     `Dear ${customer.name},\nThank you for contacting us regarding your deposit refund for ${caseDetails.relatedRentalNo}. We are currently checking the status with our Finance team and will update you by today at 16:00.\n\nBest regards,\n${agentName}\nAGMC | Budget Rent a Car`
   );
   const [templateSelected, setTemplateSelected] = useState('');
+  const [copiedTicket, setCopiedTicket] = useState(false);
+
+  const handleCopyTicket = (text: string) => {
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    setCopiedTicket(true);
+    setTimeout(() => setCopiedTicket(false), 2000);
+  };
 
   const templates: Record<string, string> = {
     refund_status: `Dear ${customer.name},\nThank you for contacting us regarding your deposit refund for ${caseDetails.relatedRentalNo}. We are currently checking the status with our Finance team and will update you by today at 16:00.\n\nBest regards,\n${agentName}\nAGMC | Budget Rent a Car`,
@@ -52,7 +62,7 @@ export const CasesPage: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 flex flex-col justify-start overflow-hidden p-2 space-y-2 animate-fade-in select-none">
+    <div className="flex-1 flex flex-col justify-start overflow-hidden p-2 space-y-2 animate-fade-in select-text">
       {/* 1. Case Metadata Header Card */}
       <div className="bg-white border border-slate-200 rounded p-2.5 shadow-2xs space-y-1.5 shrink-0">
         {/* Case Title Row */}
@@ -85,9 +95,23 @@ export const CasesPage: React.FC = () => {
         <div className="grid grid-cols-6 gap-2 text-[10px] pt-0.5">
           <div>
             <span className="text-slate-400 block">Ticket No.</span>
-            <span className="font-bold text-slate-900 font-mono text-[11px]">
-              {caseDetails.ticketNo}
-            </span>
+            <div className="flex items-center space-x-1">
+              <span className="font-bold text-slate-900 font-mono text-[11px] select-text">
+                {caseDetails.ticketNo}
+              </span>
+              <button
+                type="button"
+                onClick={() => handleCopyTicket(caseDetails.ticketNo)}
+                className="p-0.5 text-slate-400 hover:text-blue-600 rounded transition-colors cursor-pointer"
+                title="Copy ticket number"
+              >
+                {copiedTicket ? (
+                  <Check className="w-3 h-3 text-emerald-600" />
+                ) : (
+                  <Copy className="w-3 h-3" />
+                )}
+              </button>
+            </div>
           </div>
 
           <div>

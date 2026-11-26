@@ -430,7 +430,7 @@ export const CreateBookingModal: React.FC = () => {
       }
 
       setResultMessage(null);
-      setActiveTab('schedule');
+      setActiveTab('customer');
     }
   }, [
     isCreateBookingOpen,
